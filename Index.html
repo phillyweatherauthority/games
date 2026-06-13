@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Storm Catcher!</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: linear-gradient(180deg, #1a1a4e 0%, #2d2d8f 40%, #4a90d9 100%);
+    min-height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #sky {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  /* Animated star background */
+  .star {
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+    animation: twinkle 2s infinite alternate;
+  }
+  @keyframes twinkle {
+    from { opacity: 0.3; }
+    to { opacity: 1; }
+  }
+
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 24px;
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+  }
+
+  #score-display {
+    font-family: 'Fredoka One', cursive;
+    font-size: 2rem;
+    color: #FFE14D;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+
+  #title-text {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.6rem;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    letter-spacing: 1px;
+  }
+
+  #timer-display {
+    font-family: 'Fredoka One', cursive;
+    font-size: 2rem;
+    color: #7FFFD4;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+
+  /* Weather objects */
+  .weather-obj {
+    position: absolute;
+    font-size: 2.8rem;
+    cursor: pointer;
+    transition: transform 0.1s;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+    pointer-events: all;
+    z-index: 50;
+    line-height: 1;
+  }
+  .weather-obj:hover { transform: scale(1.15); }
+  .weather-obj.hit {
+    animation: pop 0.3s forwards;
+    pointer-events: none;
+  }
+  @keyframes pop {
+    0%   { transform: scale(1); opacity: 1; }
+    50%  { transform: scale(1.8); opacity: 0.8; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+
+  /* Score popup */
+  .score-popup {
+    position: absolute;
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.6rem;
+    pointer-events: none;
+    z-index: 200;
+    animation: floatUp 0.9s ease-out forwards;
+  }
+  @keyframes floatUp {
+    0%   { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-80px); opacity: 0; }
+  }
+
+  /* Screens */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    background: rgba(10, 10, 40, 0.85);
+    backdrop-filter: blur(8px);
+  }
+  .screen h1 {
+    font-family: 'Fredoka One', cursive;
+    font-size: 3.5rem;
+    color: #FFE14D;
+    text-shadow: 0 0 30px rgba(255,225,77,0.6);
+    margin-bottom: 10px;
+  }
+  .screen p {
+    color: #c8d8ff;
+    font-size: 1.1rem;
+    text-align: center;
+    max-width: 460px;
+    line-height: 1.6;
+    margin-bottom: 6px;
+  }
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 28px;
+    margin: 18px 0 24px;
+    color: white;
+    font-size: 1.05rem;
+  }
+  .legend-item { display: flex; align-items: center; gap: 10px; }
+  .legend-item span:first-child { font-size: 2rem; }
+
+  .btn {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.6rem;
+    padding: 14px 48px;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #FFE14D, #FF9800);
+    color: #1a1a4e;
+    box-shadow: 0 6px 20px rgba(255,152,0,0.45);
+    transition: transform 0.15s, box-shadow 0.15s;
+    margin-top: 10px;
+  }
+  .btn:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(255,152,0,0.55); }
+  .btn:active { transform: translateY(0); }
+
+  /* Level banner */
+  #level-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Fredoka One', cursive;
+    font-size: 3rem;
+    color: #FFE14D;
+    text-shadow: 0 0 40px rgba(255,225,77,0.8);
+    z-index: 200;
+    pointer-events: none;
+    opacity: 0;
+  }
+  #level-banner.show {
+    animation: levelPop 1.5s ease-out forwards;
+  }
+  @keyframes levelPop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    30%  { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    70%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  /* Combo display */
+  #combo-display {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.4rem;
+    color: #FF6B6B;
+    text-shadow: 0 0 12px rgba(255,107,107,0.7);
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  /* Danger flash */
+  #danger-flash {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,0,0,0.25);
+    pointer-events: none;
+    z-index: 150;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+</style>
+</head>
+<body>
+
+<div id="sky">
+  <div id="danger-flash"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="score-display">⭐ 0</div>
+    <div id="title-text">⛈️ Storm Catcher</div>
+    <div id="timer-display">⏱ 60</div>
+  </div>
+
+  <div id="combo-display"></div>
+  <div id="level-banner"></div>
+
+  <!-- Start Screen -->
+  <div class="screen" id="start-screen">
+    <h1>⛈️ Storm Catcher!</h1>
+    <p>Weather is falling from the sky — click the <strong>good weather</strong> and dodge the <strong>bad weather</strong>!</p>
+    <div class="legend">
+      <div class="legend-item"><span>☀️</span><span style="color:#FFE14D">Sun +10 pts</span></div>
+      <div class="legend-item"><span>🌈</span><span style="color:#a78bfa">Rainbow +25 pts</span></div>
+      <div class="legend-item"><span>⭐</span><span style="color:#FFE14D">Star +15 pts</span></div>
+      <div class="legend-item"><span>🌸</span><span style="color:#f9a8d4">Flower +20 pts</span></div>
+      <div class="legend-item"><span>⚡</span><span style="color:#FF6B6B">Lightning −15 pts</span></div>
+      <div class="legend-item"><span>🌪️</span><span style="color:#FF6B6B">Tornado −20 pts</span></div>
+      <div class="legend-item"><span>🌩️</span><span style="color:#FF6B6B">Storm −10 pts</span></div>
+    </div>
+    <p style="font-size:0.95rem; color:#94a3b8;">Click fast! Combos multiply your points. You have 60 seconds.</p>
+    <button class="btn" onclick="startGame()">Let's Play! 🎮</button>
+  </div>
+
+  <!-- End Screen -->
+  <div class="screen" id="end-screen" style="display:none;">
+    <h1 id="end-title">Time's Up! ⏰</h1>
+    <p id="end-message"></p>
+    <p style="font-size:2.5rem; margin: 16px 0;" id="final-score"></p>
+    <p id="end-rating" style="font-size:1.4rem; margin-bottom:8px;"></p>
+    <button class="btn" onclick="startGame()">Play Again! 🔄</button>
+  </div>
+</div>
+
+<script>
+  // Generate twinkling stars
+  const sky = document.getElementById('sky');
+  for (let i = 0; i < 60; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 3 + 1;
+    s.style.cssText = `
+      width:${size}px; height:${size}px;
+      top:${Math.random()*100}%;
+      left:${Math.random()*100}%;
+      animation-delay:${Math.random()*3}s;
+      animation-duration:${1.5+Math.random()*2}s;
+    `;
+    sky.appendChild(s);
+  }
+
+  const WEATHER = [
+    { emoji: '☀️', points: 10,  good: true  },
+    { emoji: '⭐', points: 15,  good: true  },
+    { emoji: '🌈', points: 25,  good: true  },
+    { emoji: '🌸', points: 20,  good: true  },
+    { emoji: '🌤️', points: 8,   good: true  },
+    { emoji: '⚡', points: -15, good: false },
+    { emoji: '🌪️', points: -20, good: false },
+    { emoji: '🌩️', points: -10, good: false },
+    { emoji: '🌨️', points: -8,  good: false },
+  ];
+
+  let score = 0;
+  let timeLeft = 60;
+  let combo = 0;
+  let spawnInterval, timerInterval;
+  let running = false;
+  let level = 1;
+  let objectsSpawned = 0;
+
+  function startGame() {
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('end-screen').style.display = 'none';
+    // Clear old objects
+    document.querySelectorAll('.weather-obj').forEach(e => e.remove());
+    document.querySelectorAll('.score-popup').forEach(e => e.remove());
+
+    score = 0; timeLeft = 60; combo = 0; level = 1; objectsSpawned = 0;
+    running = true;
+    updateHUD();
+
+    spawnInterval = setInterval(spawnObject, getSpawnRate());
+    timerInterval = setInterval(tick, 1000);
+  }
+
+  function getSpawnRate() {
+    return Math.max(400, 900 - (level - 1) * 120);
+  }
+
+  function tick() {
+    timeLeft--;
+    updateHUD();
+
+    // Level up every 12 seconds
+    if (timeLeft > 0 && (60 - timeLeft) % 12 === 0 && timeLeft !== 60) {
+      level++;
+      showLevelBanner();
+      clearInterval(spawnInterval);
+      spawnInterval = setInterval(spawnObject, getSpawnRate());
+    }
+
+    if (timeLeft <= 0) endGame();
+  }
+
+  function updateHUD() {
+    document.getElementById('score-display').textContent = `⭐ ${score}`;
+    document.getElementById('timer-display').textContent = `⏱ ${timeLeft}`;
+    document.getElementById('timer-display').style.color = timeLeft <= 10 ? '#FF6B6B' : '#7FFFD4';
+  }
+
+  function spawnObject() {
+    if (!running) return;
+    objectsSpawned++;
+
+    // Bias toward good objects early, more bad later
+    const badChance = 0.25 + (level - 1) * 0.06;
+    const isForced = Math.random() < badChance;
+    const pool = WEATHER.filter(w => isForced ? !w.good : w.good);
+    const fallback = WEATHER;
+    const chosen = pool.length ? pool[Math.floor(Math.random() * pool.length)]
+                               : fallback[Math.floor(Math.random() * fallback.length)];
+
+    const el = document.createElement('div');
+    el.className = 'weather-obj';
+    el.textContent = chosen.emoji;
+    el.dataset.points = chosen.points;
+    el.dataset.good = chosen.good;
+
+    const size = 44 + level * 2;
+    el.style.fontSize = size + 'px';
+
+    const startX = Math.random() * (window.innerWidth - 80);
+    el.style.left = startX + 'px';
+    el.style.top = '-80px';
+
+    sky.appendChild(el);
+
+    const fallDuration = Math.max(1800, 3200 - level * 280);
+    const startTime = performance.now();
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (el.classList.contains('hit')) return;
+      el.classList.add('hit');
+      handleClick(chosen, el);
+    });
+
+    function fall(ts) {
+      if (!running) { el.remove(); return; }
+      const elapsed = ts - startTime;
+      const progress = elapsed / fallDuration;
+      if (progress >= 1) {
+        // Missed good object — small combo break
+        if (chosen.good && combo > 1) { combo = 0; updateCombo(); }
+        el.remove();
+        return;
+      }
+      const y = -80 + progress * (window.innerHeight + 160);
+      el.style.top = y + 'px';
+      if (!el.classList.contains('hit')) requestAnimationFrame(fall);
+    }
+    requestAnimationFrame(fall);
+  }
+
+  function handleClick(type, el) {
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    let pts = type.points;
+    if (type.good) {
+      combo++;
+      if (combo >= 3) {
+        const mult = 1 + (combo - 2) * 0.5;
+        pts = Math.round(pts * mult);
+        updateCombo();
+      }
+    } else {
+      combo = 0;
+      updateCombo();
+      flashDanger();
+    }
+
+    score = Math.max(0, score + pts);
+    updateHUD();
+    showPopup(cx, cy, pts, type.good);
+  }
+
+  function showPopup(x, y, pts, good) {
+    const el = document.createElement('div');
+    el.className = 'score-popup';
+    el.textContent = (pts > 0 ? '+' : '') + pts + (combo >= 3 && good ? ' 🔥' : '');
+    el.style.left = (x - 30) + 'px';
+    el.style.top = (y - 20) + 'px';
+    el.style.color = pts > 0 ? '#7FFFD4' : '#FF6B6B';
+    sky.appendChild(el);
+    setTimeout(() => el.remove(), 900);
+  }
+
+  function updateCombo() {
+    const el = document.getElementById('combo-display');
+    if (combo >= 3) {
+      el.textContent = `🔥 ${combo}x COMBO!`;
+      el.style.opacity = '1';
+    } else {
+      el.style.opacity = '0';
+    }
+  }
+
+  function flashDanger() {
+    const el = document.getElementById('danger-flash');
+    el.style.opacity = '1';
+    setTimeout(() => el.style.opacity = '0', 200);
+  }
+
+  function showLevelBanner() {
+    const el = document.getElementById('level-banner');
+    el.textContent = `Level ${level}! 🌪️`;
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+
+  function endGame() {
+    running = false;
+    clearInterval(spawnInterval);
+    clearInterval(timerInterval);
+    document.querySelectorAll('.weather-obj').forEach(e => e.remove());
+
+    let rating, emoji;
+    if (score >= 600)      { rating = 'Storm Master!';    emoji = '🏆'; }
+    else if (score >= 400) { rating = 'Weather Wizard!';  emoji = '⭐'; }
+    else if (score >= 200) { rating = 'Cloud Chaser!';    emoji = '🌤️'; }
+    else if (score >= 100) { rating = 'Getting There!';   emoji = '🌱'; }
+    else                   { rating = 'Keep Practicing!'; emoji = '🌧️'; }
+
+    document.getElementById('end-title').textContent = 'Time\'s Up! ⏰';
+    document.getElementById('final-score').textContent = `⭐ ${score} points`;
+    document.getElementById('end-rating').textContent = `${emoji} ${rating}`;
+    document.getElementById('end-message').textContent = 'Great run! Can you beat your score?';
+    document.getElementById('end-screen').style.display = 'flex';
+  }
+</script>
+</body>
+</html>
