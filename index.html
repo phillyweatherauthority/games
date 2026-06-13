@@ -72,6 +72,7 @@
     font-size: 2rem;
     color: #7FFFD4;
     text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    transition: color 0.3s;
   }
 
   .weather-obj {
@@ -110,6 +111,40 @@
     100% { transform: translateY(-80px); opacity: 0; }
   }
 
+  /* +5s time bonus notification */
+  #time-bonus {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Fredoka One', cursive;
+    font-size: 2.6rem;
+    color: #7FFFD4;
+    text-shadow: 0 0 30px rgba(127,255,212,0.9);
+    z-index: 250;
+    pointer-events: none;
+    opacity: 0;
+    white-space: nowrap;
+  }
+  #time-bonus.show {
+    animation: timePop 1.4s ease-out forwards;
+  }
+  @keyframes timePop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+    25%  { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+    65%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+  }
+
+  /* Timer flash green when time added */
+  #timer-display.bonus {
+    animation: timerBonus 0.6s ease-out;
+  }
+  @keyframes timerBonus {
+    0%   { transform: scale(1.4); color: #7FFFD4; }
+    100% { transform: scale(1); }
+  }
+
   .screen {
     position: absolute;
     inset: 0;
@@ -141,12 +176,23 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 8px 24px;
-    margin: 14px 0 20px;
+    margin: 14px 0 16px;
     color: white;
     font-size: 1rem;
   }
   .legend-item { display: flex; align-items: center; gap: 8px; }
   .legend-item span:first-child { font-size: 1.8rem; }
+
+  .bonus-note {
+    background: rgba(127,255,212,0.12);
+    border: 1px solid rgba(127,255,212,0.35);
+    border-radius: 12px;
+    padding: 8px 18px;
+    color: #7FFFD4;
+    font-size: 0.95rem;
+    margin: 4px 0 14px;
+    text-align: center;
+  }
 
   .btn {
     font-family: 'Fredoka One', cursive;
@@ -214,12 +260,24 @@
     opacity: 0;
     transition: opacity 0.15s;
   }
+
+  /* Green flash when time added */
+  #time-flash {
+    position: absolute;
+    inset: 0;
+    background: rgba(127,255,212,0.18);
+    pointer-events: none;
+    z-index: 150;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
 </style>
 </head>
 <body>
 
 <div id="sky">
   <div id="danger-flash"></div>
+  <div id="time-flash"></div>
 
   <div id="hud">
     <div id="score-display">⭐ 0</div>
@@ -229,6 +287,7 @@
 
   <div id="combo-display"></div>
   <div id="level-banner"></div>
+  <div id="time-bonus"></div>
 
   <div class="screen" id="start-screen">
     <h1>⛈️ Storm Catcher!</h1>
@@ -242,6 +301,7 @@
       <div class="legend-item"><span>🌪️</span><span style="color:#FF6B6B">Tornado −20 pts</span></div>
       <div class="legend-item"><span>🌩️</span><span style="color:#FF6B6B">Storm −10 pts</span></div>
     </div>
+    <div class="bonus-note">⏱ Hit a 5x combo → earn +5 seconds! Max level: 10</div>
     <p style="font-size:0.9rem; color:#94a3b8;">Tap fast! Combos multiply your points. You have 60 seconds.</p>
     <button class="btn" id="start-btn">Let's Play! 🎮</button>
   </div>
@@ -250,25 +310,20 @@
     <h1 id="end-title">Time's Up! ⏰</h1>
     <p id="end-message"></p>
     <p style="font-size:2.5rem; margin: 16px 0;" id="final-score"></p>
-    <p id="end-rating" style="font-size:1.4rem; margin-bottom:8px;"></p>
+    <p id="end-rating" style="font-size:1.4rem; margin-bottom:4px;"></p>
+    <p id="end-level" style="font-size:1rem; color:#94a3b8; margin-bottom:8px;"></p>
     <button class="btn" id="replay-btn">Play Again! 🔄</button>
   </div>
 </div>
 
 <script>
-  // Bind buttons via JS to avoid inline onclick issues on iOS
-  document.getElementById('start-btn').addEventListener('touchend', function(e) {
-    e.preventDefault(); startGame();
-  });
+  document.getElementById('start-btn').addEventListener('touchend', function(e) { e.preventDefault(); startGame(); });
   document.getElementById('start-btn').addEventListener('click', startGame);
-  document.getElementById('replay-btn').addEventListener('touchend', function(e) {
-    e.preventDefault(); startGame();
-  });
+  document.getElementById('replay-btn').addEventListener('touchend', function(e) { e.preventDefault(); startGame(); });
   document.getElementById('replay-btn').addEventListener('click', startGame);
 
   const sky = document.getElementById('sky');
 
-  // Stars
   for (let i = 0; i < 60; i++) {
     const s = document.createElement('div');
     s.className = 'star';
@@ -289,17 +344,18 @@
     { emoji: '🌨️', points: -8,  good: false },
   ];
 
-  // Detect mobile for sizing
+  const MAX_LEVEL = 10;
+  const COMBO_TIME_BONUS = 5;      // seconds added at 5x combo
+  const COMBO_BONUS_THRESHOLD = 5; // which combo triggers the bonus
   const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
   const OBJ_SIZE = isMobile ? 72 : 56;
 
   let score = 0, timeLeft = 60, combo = 0;
   let spawnInterval, timerInterval;
   let running = false, level = 1;
-
-  // Track objects by ID for CSS-transition-based movement
-  let objects = {};
-  let objIdCounter = 0;
+  let secondsElapsed = 0;
+  let objects = {}, objIdCounter = 0;
+  let timeBonusEarnedAtCombo = 0; // track so we only give bonus once per 5x threshold
 
   function startGame() {
     document.getElementById('start-screen').style.display = 'none';
@@ -307,7 +363,8 @@
     document.querySelectorAll('.weather-obj').forEach(e => e.remove());
     document.querySelectorAll('.score-popup').forEach(e => e.remove());
 
-    score = 0; timeLeft = 60; combo = 0; level = 1;
+    score = 0; timeLeft = 60; combo = 0; level = 1; secondsElapsed = 0;
+    timeBonusEarnedAtCombo = 0;
     objects = {};
     running = true;
     updateHUD();
@@ -317,18 +374,26 @@
   }
 
   function getSpawnRate() {
-    return Math.max(400, 900 - (level - 1) * 120);
+    return Math.max(300, 900 - (level - 1) * 100);
+  }
+
+  function getFallDuration() {
+    return Math.max(1200, 3200 - level * 220);
   }
 
   function tick() {
     timeLeft--;
+    secondsElapsed++;
     updateHUD();
-    if (timeLeft > 0 && (60 - timeLeft) % 12 === 0) {
+
+    // Level up every 12 seconds, up to MAX_LEVEL
+    if (secondsElapsed > 0 && secondsElapsed % 12 === 0 && level < MAX_LEVEL) {
       level++;
       showLevelBanner();
       clearInterval(spawnInterval);
       spawnInterval = setInterval(spawnObject, getSpawnRate());
     }
+
     if (timeLeft <= 0) endGame();
   }
 
@@ -341,7 +406,7 @@
   function spawnObject() {
     if (!running) return;
 
-    const badChance = 0.25 + (level - 1) * 0.06;
+    const badChance = 0.25 + (level - 1) * 0.055;
     const isForced = Math.random() < badChance;
     const pool = WEATHER.filter(w => isForced ? !w.good : w.good);
     const chosen = pool[Math.floor(Math.random() * pool.length)];
@@ -359,14 +424,12 @@
     el.style.left = startX + 'px';
     el.style.top = '-' + OBJ_SIZE + 'px';
 
-    // Use CSS transition for smooth falling — more reliable for touch than rAF
-    const fallDuration = Math.max(1800, 3200 - level * 280);
-    el.style.transition = `top ${fallDuration}ms linear`;
+    const dur = getFallDuration();
+    el.style.transition = `top ${dur}ms linear`;
 
     sky.appendChild(el);
     objects[id] = { el, chosen, active: true };
 
-    // Trigger fall on next frame
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (objects[id] && objects[id].active) {
@@ -375,14 +438,13 @@
       });
     });
 
-    // Remove after fall completes
     const cleanup = setTimeout(() => {
       if (objects[id] && objects[id].active) {
         if (chosen.good && combo > 1) { combo = 0; updateCombo(); }
         el.remove();
         delete objects[id];
       }
-    }, fallDuration + 100);
+    }, dur + 100);
 
     function onTap(e) {
       e.stopPropagation();
@@ -391,19 +453,15 @@
       objects[id].active = false;
       clearTimeout(cleanup);
 
-      // Get position before adding hit class
       const rect = el.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
 
-      // Stop the transition at current position
-      const currentTop = rect.top;
       el.style.transition = 'none';
-      el.style.top = currentTop + 'px';
-
+      el.style.top = rect.top + 'px';
       el.classList.add('hit');
-      handleScore(chosen, cx, cy);
 
+      handleScore(chosen, cx, cy);
       setTimeout(() => { el.remove(); delete objects[id]; }, 320);
     }
 
@@ -413,21 +471,52 @@
 
   function handleScore(type, cx, cy) {
     let pts = type.points;
+
     if (type.good) {
       combo++;
+
+      // Apply combo multiplier
       if (combo >= 3) {
         const mult = 1 + (combo - 2) * 0.5;
         pts = Math.round(pts * mult);
       }
+
+      // Award +5 seconds at every 5x combo milestone
+      if (combo > 0 && combo % COMBO_BONUS_THRESHOLD === 0) {
+        timeLeft += COMBO_TIME_BONUS;
+        showTimeBonusNotification();
+      }
+
       updateCombo();
     } else {
       combo = 0;
       updateCombo();
       flashDanger();
     }
+
     score = Math.max(0, score + pts);
     updateHUD();
     showPopup(cx, cy, pts, type.good);
+  }
+
+  function showTimeBonusNotification() {
+    // Flash the screen green
+    const tf = document.getElementById('time-flash');
+    tf.style.opacity = '1';
+    setTimeout(() => tf.style.opacity = '0', 300);
+
+    // Animate the timer
+    const td = document.getElementById('timer-display');
+    td.classList.remove('bonus');
+    void td.offsetWidth;
+    td.classList.add('bonus');
+
+    // Show the banner
+    const el = document.getElementById('time-bonus');
+    el.textContent = '⏱ +5 seconds!';
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
   }
 
   function showPopup(x, y, pts, good) {
@@ -444,8 +533,14 @@
   function updateCombo() {
     const el = document.getElementById('combo-display');
     if (combo >= 3) {
-      el.textContent = `🔥 ${combo}x COMBO!`;
+      const next = COMBO_BONUS_THRESHOLD - (combo % COMBO_BONUS_THRESHOLD);
+      const hint = next === COMBO_BONUS_THRESHOLD ? '' : ` (${next} more → +5s!)`;
+      el.textContent = `🔥 ${combo}x COMBO!${hint}`;
       el.style.opacity = '1';
+    } else if (combo > 0) {
+      const needed = COMBO_BONUS_THRESHOLD - combo;
+      el.textContent = `${combo}x combo — ${needed} more for +5s!`;
+      el.style.opacity = '0.7';
     } else {
       el.style.opacity = '0';
     }
@@ -459,7 +554,7 @@
 
   function showLevelBanner() {
     const el = document.getElementById('level-banner');
-    el.textContent = `Level ${level}! 🌪️`;
+    el.textContent = level === MAX_LEVEL ? `MAX LEVEL! 🌪️` : `Level ${level}! 🌪️`;
     el.classList.remove('show');
     void el.offsetWidth;
     el.classList.add('show');
@@ -473,15 +568,17 @@
     objects = {};
 
     let rating, emoji;
-    if (score >= 600)      { rating = 'Storm Master!';    emoji = '🏆'; }
-    else if (score >= 400) { rating = 'Weather Wizard!';  emoji = '⭐'; }
-    else if (score >= 200) { rating = 'Cloud Chaser!';    emoji = '🌤️'; }
-    else if (score >= 100) { rating = 'Getting There!';   emoji = '🌱'; }
-    else                   { rating = 'Keep Practicing!'; emoji = '🌧️'; }
+    if (score >= 800)      { rating = 'Storm Legend!';   emoji = '🏆'; }
+    else if (score >= 600) { rating = 'Storm Master!';   emoji = '🥇'; }
+    else if (score >= 400) { rating = 'Weather Wizard!'; emoji = '⭐'; }
+    else if (score >= 200) { rating = 'Cloud Chaser!';   emoji = '🌤️'; }
+    else if (score >= 100) { rating = 'Getting There!';  emoji = '🌱'; }
+    else                   { rating = 'Keep Practicing!';emoji = '🌧️'; }
 
     document.getElementById('end-title').textContent = "Time's Up! ⏰";
     document.getElementById('final-score').textContent = `⭐ ${score} points`;
     document.getElementById('end-rating').textContent = `${emoji} ${rating}`;
+    document.getElementById('end-level').textContent = `Reached Level ${level} of ${MAX_LEVEL}`;
     document.getElementById('end-message').textContent = 'Great run! Can you beat your score?';
     document.getElementById('end-screen').style.display = 'flex';
   }
