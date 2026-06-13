@@ -82,8 +82,14 @@
     pointer-events: all;
     z-index: 50;
     line-height: 1;
+    padding: 10px;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
   }
   .weather-obj:hover { transform: scale(1.15); }
+  @media (max-width: 768px) {
+    .weather-obj { font-size: 3.6rem; padding: 14px; }
+  }
   .weather-obj.hit {
     animation: pop 0.3s forwards;
     pointer-events: none;
@@ -362,12 +368,15 @@
     const fallDuration = Math.max(1800, 3200 - level * 280);
     const startTime = performance.now();
 
-    el.addEventListener('click', (e) => {
+    function onTap(e) {
       e.stopPropagation();
+      e.preventDefault();
       if (el.classList.contains('hit')) return;
       el.classList.add('hit');
       handleClick(chosen, el);
-    });
+    }
+    el.addEventListener('click', onTap);
+    el.addEventListener('touchstart', onTap, { passive: false });
 
     function fall(ts) {
       if (!running) { el.remove(); return; }
