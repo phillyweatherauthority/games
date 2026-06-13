@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hurricane Pilot — NOAA WP-3D</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: #060a0f;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    font-family: 'Barlow', sans-serif;
+  }
+
+  canvas { display: block; }
+
+  /* HUD — instrument panel style */
+  #ui {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: stretch;
+    z-index: 10;
+    pointer-events: none;
+    background: rgba(4, 8, 14, 0.92);
+    border-bottom: 1px solid rgba(255, 120, 0, 0.3);
+  }
+
+  .hud-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 18px;
+    border-right: 1px solid rgba(255,120,0,0.15);
+    min-width: 110px;
+  }
+  .hud-block:last-child { border-right: none; border-left: 1px solid rgba(255,120,0,0.15); }
+  .hud-block.center { flex: 1; border-right: 1px solid rgba(255,120,0,0.15); }
+
+  .hud-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    color: rgba(255,120,0,0.6);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .hud-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.3rem;
+    color: #ff8c00;
+    letter-spacing: 1px;
+  }
+  .hud-value.green { color: #4dffb4; }
+  .hud-value.white { color: #e8eef4; font-size: 1rem; }
+  .hud-value.red { color: #ff4d4d; }
+
+  /* Screens */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    background: rgba(4, 8, 14, 0.96);
+    padding: 28px 24px;
+  }
+
+  .noaa-badge {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 4px;
+    color: rgba(255,120,0,0.6);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .screen h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: #e8eef4;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+
+  .screen h1 span { color: #ff8c00; }
+
+  .divider {
+    width: 60px;
+    height: 2px;
+    background: #ff8c00;
+    margin: 12px 0;
+  }
+
+  .screen p {
+    color: #8a9bb0;
+    font-size: 0.95rem;
+    text-align: center;
+    max-width: 420px;
+    line-height: 1.7;
+    margin-bottom: 5px;
+  }
+
+  .brief-box {
+    background: rgba(255,120,0,0.06);
+    border: 1px solid rgba(255,120,0,0.2);
+    border-radius: 4px;
+    padding: 14px 20px;
+    margin: 14px 0;
+    max-width: 420px;
+    width: 100%;
+  }
+  .brief-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,120,0,0.1);
+    font-size: 0.9rem;
+  }
+  .brief-row:last-child { border-bottom: none; }
+  .brief-key {
+    font-family: 'Share Tech Mono', monospace;
+    color: #ff8c00;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+  }
+  .brief-val { color: #c0ccd8; font-size: 0.88rem; }
+  .brief-val.warn { color: #ff6b6b; }
+  .brief-val.good { color: #4dffb4; }
+
+  .controls-row {
+    display: flex;
+    gap: 20px;
+    margin: 12px 0 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ctrl {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    color: #8a9bb0;
+  }
+  .ctrl-key {
+    background: rgba(255,120,0,0.12);
+    border: 1px solid rgba(255,120,0,0.3);
+    border-radius: 3px;
+    padding: 3px 9px;
+    font-family: 'Share Tech Mono', monospace;
+    color: #ff8c00;
+    font-size: 0.78rem;
+    letter-spacing: 1px;
+  }
+
+  .btn {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 12px 42px;
+    border: 2px solid #ff8c00;
+    border-radius: 2px;
+    cursor: pointer;
+    background: transparent;
+    color: #ff8c00;
+    transition: background 0.2s, color 0.2s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    margin-top: 8px;
+  }
+  .btn:hover, .btn:active {
+    background: #ff8c00;
+    color: #060a0f;
+  }
+
+  /* Overlay messages */
+  #overlay-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #e8eef4;
+    z-index: 15;
+    pointer-events: none;
+    opacity: 0;
+    white-space: nowrap;
+    text-align: center;
+  }
+  #overlay-message.show { animation: msgPop 1.8s ease-out forwards; }
+  @keyframes msgPop {
+    0%   { opacity:0; transform: translate(-50%,-50%) scale(0.85); }
+    15%  { opacity:1; transform: translate(-50%,-50%) scale(1.02); }
+    65%  { opacity:1; transform: translate(-50%,-50%) scale(1); }
+    100% { opacity:0; transform: translate(-50%,-58%) scale(1); }
+  }
+
+  /* Screen flash */
+  #hit-flash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 14;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div id="hit-flash"></div>
+
+<!-- HUD -->
+<div id="ui">
+  <div class="hud-block">
+    <div class="hud-label">Score</div>
+    <div class="hud-value" id="score-el">0000</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-label">Band</div>
+    <div class="hud-value green" id="band-el">01</div>
+  </div>
+  <div class="hud-block center">
+    <div class="hud-label">NOAA WP-3D Orion · Mission Active</div>
+    <div class="hud-value white" id="mission-el">PENETRATING OUTER BANDS</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-label">Airspeed</div>
+    <div class="hud-value green" id="speed-el">320 KT</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-label">Aircraft</div>
+    <div class="hud-value" id="lives-el">/// /// ///</div>
+  </div>
+</div>
+
+<div id="overlay-message"></div>
+
+<!-- Start Screen -->
+<div class="screen" id="start-screen">
+  <div class="noaa-badge">NOAA Aircraft Operations Center</div>
+  <h1>Hurricane <span>Pilot</span></h1>
+  <div class="divider"></div>
+  <p>You are the flight director aboard NOAA42, a WP-3D Orion hurricane hunter. Penetrate the storm bands to reach the eye wall and collect atmospheric data.</p>
+
+  <div class="brief-box">
+    <div class="brief-row">
+      <span class="brief-key">OBJECTIVE</span>
+      <span class="brief-val">Fly through wind band gaps</span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-key">DROPSONDE</span>
+      <span class="brief-val good">+30 pts — atmospheric data</span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-key">TEMP PROBE</span>
+      <span class="brief-val good">+20 pts — temperature data</span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-key">ANEMOMETER</span>
+      <span class="brief-val good">+15 pts — wind data</span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-key">LIGHTNING</span>
+      <span class="brief-val warn">Aircraft damage — lose 1 hull</span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-key">EYE WALL</span>
+      <span class="brief-val good">Bonus zone + hull repair</span>
+    </div>
+  </div>
+
+  <div class="controls-row">
+    <div class="ctrl"><span class="ctrl-key">UP / W</span><span>Climb</span></div>
+    <div class="ctrl"><span class="ctrl-key">DOWN / S</span><span>Descend</span></div>
+    <div class="ctrl"><span class="ctrl-key">TAP TOP</span><span>Climb</span></div>
+    <div class="ctrl"><span class="ctrl-key">TAP BOTTOM</span><span>Descend</span></div>
+  </div>
+
+  <p style="font-size:0.8rem;color:rgba(138,155,176,0.6);">3 hull integrity points. Each band penetrated earns points. Reach the eye for a mission bonus.</p>
+  <button class="btn" id="start-btn">Begin Mission</button>
+</div>
+
+<!-- End Screen -->
+<div class="screen" id="end-screen" style="display:none;">
+  <div class="noaa-badge">Mission Debrief</div>
+  <h1 id="end-title">Mission <span>Complete</span></h1>
+  <div class="divider"></div>
+  <p id="end-sub" style="color:#8a9bb0;"></p>
+
+  <div class="brief-box" style="margin:14px 0;">
+    <div class="brief-row">
+      <span class="brief-key">FINAL SCORE</span>
+      <span class="brief-val good" id="end-score" style="font-size:1.2rem;font-family:'Share Tech Mono',monospace;"></span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-key">RATING</span>
+      <span class="brief-val" id="end-rating"></span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-key">BANDS PENETRATED</span>
+      <span class="brief-val" id="end-bands"></span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-key">MAX BAND REACHED</span>
+      <span class="brief-val" id="end-band"></span>
+    </div>
+  </div>
+
+  <button class="btn" id="replay-btn">New Mission</button>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- State ---
+let state = 'idle';
+let score, lives, band, planeY, planeVY;
+let bands, collectibles, particles, rainDrops, lightningBolts;
+let frameId, lastTime;
+let invincible, invincibleTimer;
+let distanceTravelled, nextBandDist;
+let scored_bands;
+let missionStatus = 'PENETRATING OUTER BANDS';
+
+const PLANE_X_RATIO = 0.16;
+const GRAVITY = 0.26;
+const LIFT = -7.2;
+const MAX_VY = 9;
+const BAND_SPEED_BASE = 3.0;
+const BAND_WIDTH = 88;
+const GAP_MIN = 125;
+const GAP_MAX = 215;
+const COLLECT_SIZE = 28;
+const HUD_H = 56;
+
+const COLLECTIBLES_DEF = [
+  { label: 'DROPSONDE', pts: 30,  bad: false, color: '#4dffb4' },
+  { label: 'TEMP',      pts: 20,  bad: false, color: '#ffd44d' },
+  { label: 'WIND',      pts: 15,  bad: false, color: '#7eb8ff' },
+  { label: 'LTG',       pts: -1,  bad: true,  color: '#ff4d4d' },
+];
+
+// Input
+let inputUp = false, inputDown = false;
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowUp'   || e.key === 'w') inputUp   = true;
+  if (e.key === 'ArrowDown' || e.key === 's') inputDown = true;
+  if ((e.key === ' ' || e.key === 'Enter') && state === 'idle') startGame();
+});
+document.addEventListener('keyup', e => {
+  if (e.key === 'ArrowUp'   || e.key === 'w') inputUp   = false;
+  if (e.key === 'ArrowDown' || e.key === 's') inputDown = false;
+});
+
+let touchUp = false, touchDown = false;
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.clientY < H / 2) touchUp = true; else touchDown = true;
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  touchUp = false; touchDown = false;
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  touchUp = false; touchDown = false;
+  for (const t of e.changedTouches) {
+    if (t.clientY < H / 2) touchUp = true; else touchDown = true;
+  }
+}, { passive: false });
+canvas.addEventListener('mousedown', e => {
+  if (e.clientY < H / 2) touchUp = true; else touchDown = true;
+});
+canvas.addEventListener('mouseup', () => { touchUp = false; touchDown = false; });
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('start-btn').addEventListener('touchend', e => { e.preventDefault(); startGame(); });
+document.getElementById('replay-btn').addEventListener('click', startGame);
+document.getElementById('replay-btn').addEventListener('touchend', e => { e.preventDefault(); startGame(); });
+
+function startGame() {
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('end-screen').style.display = 'none';
+
+  score = 0; lives = 3; band = 1;
+  planeY = H / 2; planeVY = 0;
+  bands = []; collectibles = []; particles = [];
+  lightningBolts = [];
+  rainDrops = initRain();
+  invincible = false; invincibleTimer = 0;
+  distanceTravelled = 0; nextBandDist = 340;
+  scored_bands = 0;
+  missionStatus = 'PENETRATING OUTER BANDS';
+
+  updateUI();
+  state = 'playing';
+  lastTime = null;
+  cancelAnimationFrame(frameId);
+  frameId = requestAnimationFrame(loop);
+}
+
+function initRain() {
+  const drops = [];
+  for (let i = 0; i < 180; i++) {
+    drops.push({
+      x: Math.random() * 2000,
+      y: Math.random() * 1200,
+      len: 10 + Math.random() * 18,
+      speed: 6 + Math.random() * 7,
+      alpha: 0.06 + Math.random() * 0.18,
+      thick: Math.random() < 0.15 ? 1.5 : 0.8,
+    });
+  }
+  return drops;
+}
+
+function getBandSpeed() { return BAND_SPEED_BASE + (band - 1) * 0.38; }
+function getFallDuration() { return Math.max(1100, 3000 - band * 200); }
+function getGapSize() { return Math.max(GAP_MIN, GAP_MAX - (band - 1) * 9); }
+
+function loop(ts) {
+  if (!lastTime) lastTime = ts;
+  const dt = Math.min((ts - lastTime) / 16.67, 3);
+  lastTime = ts;
+  update(dt);
+  draw();
+  if (state === 'playing' || state === 'dead') frameId = requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  const up = inputUp || touchUp;
+  const down = inputDown || touchDown;
+
+  if (up)   planeVY += (LIFT - planeVY) * 0.18 * dt;
+  if (down) planeVY += (8 - planeVY) * 0.18 * dt;
+  if (!up && !down) planeVY += GRAVITY * dt;
+
+  planeVY = Math.max(-MAX_VY, Math.min(MAX_VY, planeVY));
+  planeY += planeVY * dt;
+
+  const planeH = 32;
+  if (planeY < HUD_H + planeH) { planeY = HUD_H + planeH; planeVY = 0; }
+  if (planeY > H - planeH)     { planeY = H - planeH; planeVY = 0; }
+
+  const spd = getBandSpeed();
+  distanceTravelled += spd * dt;
+
+  if (distanceTravelled >= nextBandDist) {
+    distanceTravelled = 0;
+    nextBandDist = 270 + Math.random() * 150;
+    spawnBand();
+  }
+
+  // Lightning bolts (ambient, not lethal)
+  if (Math.random() < 0.003 * dt) spawnLightning();
+  for (let i = lightningBolts.length - 1; i >= 0; i--) {
+    lightningBolts[i].life -= dt;
+    if (lightningBolts[i].life <= 0) lightningBolts.splice(i, 1);
+  }
+
+  for (let i = bands.length - 1; i >= 0; i--) {
+    bands[i].x -= spd * dt;
+
+    if (!bands[i].passed && bands[i].x + BAND_WIDTH < W * PLANE_X_RATIO) {
+      bands[i].passed = true;
+      scored_bands++;
+      score += 12 * band;
+      updateUI();
+
+      if (scored_bands % 4 === 0 && band < 12) {
+        band++;
+        updateMissionStatus();
+        showMessage(band <= 4 ? `INNER BAND ${band}` : band <= 8 ? `EYE WALL APPROACH` : `EYE WALL PENETRATION`);
+        updateUI();
+      }
+    }
+
+    if (bands[i].x < -BAND_WIDTH - 10) { bands.splice(i, 1); continue; }
+
+    if (!invincible && state === 'playing') {
+      const px = W * PLANE_X_RATIO;
+      const b = bands[i];
+      if (px + 18 > b.x && px - 18 < b.x + BAND_WIDTH) {
+        if (!b.isEye && (planeY - 16 < b.gapTop || planeY + 16 > b.gapTop + b.gapSize)) {
+          hitPlane(px, planeY);
+        } else if (b.isEye && !b.bonusGiven) {
+          b.bonusGiven = true;
+          score += 150;
+          lives = Math.min(3, lives + 1);
+          updateUI();
+          showMessage('EYE REACHED — HULL REPAIRED');
+        }
+      }
+    }
+  }
+
+  for (let i = collectibles.length - 1; i >= 0; i--) {
+    collectibles[i].x -= spd * dt;
+    if (collectibles[i].x < -50) { collectibles.splice(i, 1); continue; }
+    const dx = collectibles[i].x - W * PLANE_X_RATIO;
+    const dy = collectibles[i].y - planeY;
+    if (Math.sqrt(dx*dx + dy*dy) < 38 && !invincible) {
+      const c = collectibles.splice(i, 1)[0];
+      collectItem(c);
+    }
+  }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy += 0.15 * dt; p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  for (const d of rainDrops) {
+    d.x -= (spd * 0.6 + 2.5) * dt;
+    d.y += d.speed * dt;
+    if (d.y > H + 20) d.y = HUD_H;
+    if (d.x < -10) d.x = W + Math.random() * 80;
+  }
+
+  if (invincible) {
+    invincibleTimer -= dt;
+    if (invincibleTimer <= 0) invincible = false;
+  }
+}
+
+function spawnBand() {
+  const gap = getGapSize();
+  const gapTop = HUD_H + 20 + Math.random() * (H - gap - HUD_H - 40);
+  const isEye = band >= 4 && scored_bands > 0 && scored_bands % 8 === 7;
+
+  // Band intensity colors — radar-style
+  const intensityColors = [
+    '#1a3a5c', // band 1 — light blue
+    '#1a4a6c', // 2
+    '#1a5a5c', // 3
+    '#1a6040', // 4
+    '#2a6030', // 5 — green
+    '#4a6020', // 6
+    '#6a5818', // 7 — yellow
+    '#8a4010', // 8 — orange
+    '#9a2010', // 9 — red
+    '#a01020', // 10+
+  ];
+  const col = intensityColors[Math.min(band - 1, intensityColors.length - 1)];
+
+  bands.push({
+    x: W + 10,
+    gapTop,
+    gapSize: isEye ? H : gap,
+    isEye,
+    bonusGiven: false,
+    passed: false,
+    color: col,
+    alpha: 0.82 + Math.random() * 0.15,
+  });
+
+  if (!isEye && Math.random() < 0.6) {
+    const def = COLLECTIBLES_DEF[Math.floor(Math.random() * COLLECTIBLES_DEF.length)];
+    collectibles.push({
+      x: W + BAND_WIDTH + 50 + Math.random() * 90,
+      y: gapTop + gap * (0.25 + Math.random() * 0.5),
+      label: def.label,
+      pts: def.pts,
+      bad: def.bad,
+      color: def.color,
+      wobble: Math.random() * Math.PI * 2,
+      age: 0,
+    });
+  }
+}
+
+function spawnLightning() {
+  const x = W * 0.3 + Math.random() * W * 0.6;
+  const segs = [];
+  let cx = x, cy = HUD_H;
+  const steps = 6 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < steps; i++) {
+    const nx = cx + (Math.random() - 0.5) * 60;
+    const ny = cy + (H / steps) * (0.7 + Math.random() * 0.6);
+    segs.push({ x1: cx, y1: cy, x2: nx, y2: ny });
+    cx = nx; cy = ny;
+  }
+  lightningBolts.push({ segs, life: 4 + Math.random() * 6, maxLife: 4 + Math.random() * 6 });
+}
+
+function hitPlane(px, py) {
+  lives--;
+  invincible = true;
+  invincibleTimer = 110;
+  spawnDebris(px, py);
+  flashScreen('#ff2200');
+  updateUI();
+  if (lives <= 0) {
+    state = 'ended';
+    setTimeout(showEndScreen, 900);
+  } else {
+    showMessage('HULL DAMAGE — ' + lives + ' REMAINING');
+  }
+}
+
+function collectItem(c) {
+  if (c.bad) {
+    lives = Math.max(0, lives - 1);
+    invincible = true; invincibleTimer = 90;
+    spawnDebris(W * PLANE_X_RATIO, planeY);
+    flashScreen('#ff2200');
+    updateUI();
+    showMessage('LIGHTNING STRIKE');
+    if (lives <= 0) { state = 'ended'; setTimeout(showEndScreen, 900); }
+  } else {
+    score += c.pts;
+    updateUI();
+    spawnCollectParticles(c.x, c.y, c.color);
+  }
+}
+
+function flashScreen(color) {
+  const el = document.getElementById('hit-flash');
+  el.style.background = color;
+  el.style.opacity = '0.35';
+  setTimeout(() => el.style.opacity = '0', 180);
+}
+
+function spawnDebris(x, y) {
+  for (let i = 0; i < 14; i++) {
+    const angle = (Math.PI * 2 * i) / 14 + Math.random() * 0.3;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * (2 + Math.random() * 5),
+      vy: Math.sin(angle) * (2 + Math.random() * 5),
+      life: 25 + Math.random() * 20,
+      color: Math.random() < 0.5 ? '#ff6600' : '#ffaa00',
+      size: 2 + Math.random() * 3,
+    });
+  }
+}
+
+function spawnCollectParticles(x, y, color) {
+  for (let i = 0; i < 6; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 4,
+      vy: -1.5 - Math.random() * 3,
+      life: 18 + Math.random() * 12,
+      color,
+      size: 2 + Math.random() * 2,
+    });
+  }
+}
+
+// --- Drawing ---
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  drawBackground();
+  drawLightning();
+  drawRain();
+  drawBands();
+  drawCollectibles();
+  drawParticles();
+  drawPlane();
+  if ('ontouchstart' in window && state === 'playing') drawTouchGuide();
+}
+
+function drawBackground() {
+  // Deep storm sky
+  const g = ctx.createLinearGradient(0, HUD_H, 0, H);
+  g.addColorStop(0,   '#060c18');
+  g.addColorStop(0.4, '#071220');
+  g.addColorStop(0.75,'#081828');
+  g.addColorStop(1,   '#05101e');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, HUD_H, W, H - HUD_H);
+
+  // Faint radar sweep feel — subtle horizontal gradient bands
+  for (let i = 0; i < 4; i++) {
+    const yp = HUD_H + (H - HUD_H) * (i / 4);
+    const bg = ctx.createLinearGradient(0, yp, 0, yp + (H - HUD_H) / 4);
+    bg.addColorStop(0, 'rgba(10,30,60,0.0)');
+    bg.addColorStop(0.5, 'rgba(10,30,60,0.08)');
+    bg.addColorStop(1, 'rgba(10,30,60,0.0)');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, yp, W, (H - HUD_H) / 4);
+  }
+
+  // Ocean — very dark
+  const og = ctx.createLinearGradient(0, H * 0.78, 0, H);
+  og.addColorStop(0, 'rgba(4,12,24,0)');
+  og.addColorStop(1, 'rgba(2,8,18,0.95)');
+  ctx.fillStyle = og;
+  ctx.fillRect(0, H * 0.78, W, H * 0.22);
+
+  // Horizon glow
+  const hg = ctx.createLinearGradient(0, H * 0.72, 0, H * 0.82);
+  hg.addColorStop(0, 'rgba(255,100,0,0)');
+  hg.addColorStop(0.5, 'rgba(255,80,0,0.04)');
+  hg.addColorStop(1, 'rgba(255,60,0,0)');
+  ctx.fillStyle = hg;
+  ctx.fillRect(0, H * 0.72, W, H * 0.1);
+
+  // Wave lines
+  ctx.strokeStyle = 'rgba(30,80,140,0.2)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 6; i++) {
+    const wy = H * 0.81 + i * 18;
+    ctx.beginPath();
+    for (let x = 0; x < W; x += 3) {
+      const y = wy + Math.sin((x * 0.025) + Date.now() * 0.0008 * (i + 1)) * 3;
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawLightning() {
+  for (const bolt of lightningBolts) {
+    const a = (bolt.life / bolt.maxLife) * 0.7;
+    ctx.strokeStyle = `rgba(180, 210, 255, ${a})`;
+    ctx.lineWidth = 1;
+    ctx.shadowColor = 'rgba(150,180,255,0.5)';
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    for (const seg of bolt.segs) {
+      ctx.moveTo(seg.x1, seg.y1);
+      ctx.lineTo(seg.x2, seg.y2);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawRain() {
+  ctx.save();
+  for (const d of rainDrops) {
+    ctx.strokeStyle = `rgba(120,170,220,${d.alpha})`;
+    ctx.lineWidth = d.thick;
+    ctx.beginPath();
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(d.x - 3, d.y + d.len);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBands() {
+  for (const b of bands) {
+    if (b.isEye) {
+      // Eye — calm, glowing
+      const eyeCX = b.x + BAND_WIDTH;
+      const eyeG = ctx.createRadialGradient(eyeCX, H/2, 20, eyeCX, H/2, H * 0.45);
+      eyeG.addColorStop(0, 'rgba(100,200,180,0.12)');
+      eyeG.addColorStop(0.5,'rgba(60,160,140,0.06)');
+      eyeG.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = eyeG;
+      ctx.fillRect(b.x - 20, HUD_H, BAND_WIDTH * 3, H - HUD_H);
+
+      // Eye label
+      ctx.save();
+      ctx.font = '600 0.75rem Barlow Condensed, sans-serif';
+      ctx.letterSpacing = '3px';
+      ctx.fillStyle = 'rgba(100,200,170,0.7)';
+      ctx.textAlign = 'center';
+      ctx.fillText('EYE OF STORM', eyeCX, HUD_H + 28);
+      ctx.restore();
+      continue;
+    }
+
+    ctx.fillStyle = b.color;
+    ctx.globalAlpha = b.alpha;
+
+    // Top wall
+    if (b.gapTop - HUD_H > 0) {
+      ctx.fillRect(b.x, HUD_H, BAND_WIDTH, b.gapTop - HUD_H);
+      // Inner edge highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(b.x, HUD_H, 3, b.gapTop - HUD_H);
+      ctx.fillStyle = b.color;
+    }
+
+    // Bottom wall
+    const botTop = b.gapTop + b.gapSize;
+    if (H - botTop > 0) {
+      ctx.fillRect(b.x, botTop, BAND_WIDTH, H - botTop);
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(b.x, botTop, 3, H - botTop);
+      ctx.fillStyle = b.color;
+    }
+
+    // Gap edge lines
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.gapTop);
+    ctx.lineTo(b.x + BAND_WIDTH, b.gapTop);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(b.x, botTop);
+    ctx.lineTo(b.x + BAND_WIDTH, botTop);
+    ctx.stroke();
+
+    // Band intensity label (radar-style)
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '500 0.6rem Barlow, sans-serif';
+    ctx.textAlign = 'center';
+    const label = band >= 9 ? 'CAT 5' : band >= 7 ? 'CAT 4' : band >= 5 ? 'CAT 3' : band >= 3 ? 'CAT 2' : 'CAT 1';
+    ctx.fillText(label, b.x + BAND_WIDTH / 2, HUD_H + 14);
+
+    ctx.globalAlpha = 1;
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
+function drawCollectibles() {
+  const t = Date.now() * 0.0025;
+  for (const c of collectibles) {
+    const wobble = Math.sin(t + c.wobble) * 4;
+    const cy = c.y + wobble;
+
+    // Instrument box
+    const bw = 62, bh = 22;
+    ctx.fillStyle = 'rgba(4,10,20,0.85)';
+    ctx.strokeStyle = c.color;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.9;
+    roundRect(ctx, c.x - bw/2, cy - bh/2, bw, bh, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = c.color;
+    ctx.font = `600 0.7rem 'Share Tech Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 1;
+    ctx.fillText(c.label, c.x, cy);
+
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life / 35);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPlane() {
+  const px = W * PLANE_X_RATIO;
+  const angle = Math.atan2(planeVY, 14) * 0.5;
+  const flicker = invincible && Math.floor(Date.now() / 90) % 2 === 0;
+
+  ctx.save();
+  ctx.translate(px, planeY);
+  ctx.rotate(angle);
+  ctx.globalAlpha = flicker ? 0.25 : 1;
+
+  // Engine glow trail
+  const trailG = ctx.createLinearGradient(-30, 0, -90, 0);
+  trailG.addColorStop(0, 'rgba(255,140,0,0.35)');
+  trailG.addColorStop(1, 'rgba(255,140,0,0)');
+  ctx.fillStyle = trailG;
+  ctx.beginPath();
+  ctx.ellipse(-55, 5, 28, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(-55, -5, 28, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Fuselage
+  ctx.fillStyle = '#c8d8e8';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 34, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Nose cone
+  ctx.fillStyle = '#dde8f4';
+  ctx.beginPath();
+  ctx.moveTo(34, 0);
+  ctx.quadraticCurveTo(50, -2, 52, 0);
+  ctx.quadraticCurveTo(50, 2, 34, 0);
+  ctx.fill();
+
+  // Tail fin
+  ctx.fillStyle = '#b0c4d8';
+  ctx.beginPath();
+  ctx.moveTo(-26, -2);
+  ctx.lineTo(-38, -18);
+  ctx.lineTo(-22, -4);
+  ctx.closePath();
+  ctx.fill();
+
+  // Wings
+  ctx.fillStyle = '#b8ccd8';
+  ctx.beginPath();
+  ctx.moveTo(-4, -2);
+  ctx.lineTo(16, -2);
+  ctx.lineTo(10, -24);
+  ctx.lineTo(-6, -24);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(-4, 2);
+  ctx.lineTo(16, 2);
+  ctx.lineTo(10, 24);
+  ctx.lineTo(-6, 24);
+  ctx.closePath();
+  ctx.fill();
+
+  // NOAA orange stripe on fuselage
+  ctx.fillStyle = '#ff8c00';
+  ctx.fillRect(-20, -2.5, 38, 5);
+
+  // Cockpit window
+  ctx.fillStyle = 'rgba(100,180,240,0.7)';
+  ctx.beginPath();
+  ctx.ellipse(18, -2, 7, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Propeller dots (engines)
+  ctx.fillStyle = '#8a9bb0';
+  ctx.beginPath(); ctx.arc(-8, -24, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-8, 24, 3, 0, Math.PI * 2); ctx.fill();
+
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function drawTouchGuide() {
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = 'rgba(255,140,0,0.15)';
+  ctx.fillRect(0, HUD_H, W * 0.12, (H - HUD_H) / 2);
+  ctx.fillRect(0, HUD_H + (H - HUD_H) / 2, W * 0.12, (H - HUD_H) / 2);
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#ff8c00';
+  ctx.font = `600 0.65rem 'Barlow Condensed', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('CLIMB', W * 0.06, H * 0.3);
+  ctx.fillText('DESCEND', W * 0.06, H * 0.72);
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function updateMissionStatus() {
+  if (band <= 2) missionStatus = 'PENETRATING OUTER BANDS';
+  else if (band <= 5) missionStatus = 'INNER BAND PENETRATION';
+  else if (band <= 8) missionStatus = 'EYE WALL APPROACH';
+  else missionStatus = 'EYE WALL PENETRATION';
+  document.getElementById('mission-el').textContent = missionStatus;
+  document.getElementById('speed-el').textContent = (280 + band * 12) + ' KT';
+}
+
+function updateUI() {
+  document.getElementById('score-el').textContent = String(score).padStart(4, '0');
+  document.getElementById('band-el').textContent  = String(band).padStart(2, '0');
+  const bars = ['/// /// ///', '/// /// //', '/// /// /', '/// // /', '// // /', '// / /', '/ / /'];
+  document.getElementById('lives-el').textContent = lives >= 3 ? '/// /// ///' : lives === 2 ? '/// ///' : lives === 1 ? '///' : '---';
+  document.getElementById('lives-el').style.color = lives >= 2 ? '#4dffb4' : '#ff4d4d';
+}
+
+function showMessage(msg) {
+  const el = document.getElementById('overlay-message');
+  el.textContent = msg;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+}
+
+function showEndScreen() {
+  state = 'idle';
+  let rating;
+  if (score >= 600)      rating = 'MISSION COMMANDER';
+  else if (score >= 400) rating = 'SENIOR FLIGHT DIRECTOR';
+  else if (score >= 200) rating = 'FLIGHT METEOROLOGIST';
+  else if (score >= 100) rating = 'FLIGHT ENGINEER';
+  else                   rating = 'TRAINEE OBSERVER';
+
+  const crashed = lives <= 0;
+  document.getElementById('end-title').innerHTML = crashed
+    ? 'Mission <span>Aborted</span>'
+    : 'Mission <span>Complete</span>';
+  document.getElementById('end-score').textContent = String(score).padStart(4, '0') + ' pts';
+  document.getElementById('end-rating').textContent = rating;
+  document.getElementById('end-bands').textContent = scored_bands;
+  document.getElementById('end-band').textContent = `Band ${band} of 12`;
+  document.getElementById('end-sub').textContent = crashed
+    ? 'The aircraft sustained critical damage and returned to MacDill AFB.'
+    : 'Atmospheric data successfully collected and transmitted to NHC.';
+  document.getElementById('end-screen').style.display = 'flex';
+}
+
+// Idle background
+function idleDraw() {
+  if (state !== 'idle') return;
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  ctx.fillStyle = '#060a0f';
+  ctx.fillRect(0, 0, W, H);
+  requestAnimationFrame(idleDraw);
+}
+idleDraw();
+</script>
+</body>
+</html>
