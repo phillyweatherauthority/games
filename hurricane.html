@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hurricane Pilot — NOAA WP-3D</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+/* Mobile viewport height fix — 100vh breaks on Android Chrome when served over HTTP */
+:root { --vh: 1vh; }
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;height:calc(var(--vh,1vh)*100);overflow:hidden;background:#0a0b0d;}
+body{font-family:'Barlow Condensed',sans-serif;color:#c8d0d8;user-select:none;-webkit-user-select:none;touch-action:none;}
+
+/* ── SCREENS ── */
+#start-screen,#end-screen{
+  position:fixed;inset:0;z-index:50;
+  display:flex;flex-direction:column;align-items:center;
+  background:#0a0b0d;overflow-y:auto;overflow-x:hidden;
+  height:calc(var(--vh,1vh)*100);
+}
+#game-ui{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;height:calc(var(--vh,1vh)*100);}
+
+/* ── HERO SECTION ── */
+#hero-wrap{
+  position:relative;width:100%;
+  flex-shrink:0;
+  height:min(52vw, calc(var(--vh,1vh)*38));
+  max-height:min(300px, calc(var(--vh,1vh)*42));
+  min-height:160px;
+}
+#hero-canvas{position:absolute;inset:0;width:100%;height:100%;}
+.hero-grad{
+  position:absolute;inset:0;
+  background:linear-gradient(to bottom,
+    rgba(10,11,13,0.5) 0%,
+    rgba(10,11,13,0.0) 30%,
+    rgba(10,11,13,0.0) 60%,
+    rgba(10,11,13,1.0) 100%);
+  pointer-events:none;
+}
+/* Side vignettes */
+.hero-sides{
+  position:absolute;inset:0;
+  background:linear-gradient(to right,rgba(10,11,13,0.6) 0%,transparent 18%,transparent 82%,rgba(10,11,13,0.6) 100%);
+  pointer-events:none;
+}
+
+/* ── TITLE ── */
+.title-wrap{
+  position:relative;z-index:2;
+  text-align:center;margin-top:-28px;
+  width:100%;padding:0 16px;
+  flex-shrink:0;
+}
+.title-eyebrow{
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.58rem;letter-spacing:5px;
+  color:rgba(255,140,40,0.5);text-transform:uppercase;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  margin-bottom:2px;
+}
+.title-eyebrow::before,.title-eyebrow::after{
+  content:'';display:block;width:20px;height:1px;background:rgba(255,140,40,0.35);
+}
+.title-main{
+  font-family:'Bebas Neue',cursive;
+  font-size:clamp(3rem,13vw,5.5rem);
+  color:#e2e8ee;letter-spacing:3px;line-height:0.9;
+  text-shadow:0 2px 30px rgba(0,0,0,0.95),0 0 60px rgba(0,0,0,0.8);
+}
+.title-sub{
+  font-family:'Barlow Condensed',sans-serif;font-weight:600;
+  font-size:clamp(0.65rem,2.5vw,0.82rem);
+  letter-spacing:7px;color:#c07a20;text-transform:uppercase;margin-top:1px;
+}
+
+/* ── PANEL BASE ── */
+.mpanel{
+  width:100%;max-width:460px;
+  margin:8px 0 0;padding:0 12px;
+  flex-shrink:0;
+}
+.pbox{
+  background:linear-gradient(175deg,#141618 0%,#0e1012 100%);
+  border:1px solid #2a2d32;border-radius:3px;
+  position:relative;overflow:hidden;
+}
+.pbox::before{/* rivet texture */
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 23px,rgba(255,255,255,0.012) 23px,rgba(255,255,255,0.012) 24px);
+  pointer-events:none;
+}
+.phead{
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.58rem;letter-spacing:5px;
+  color:rgba(255,140,40,0.45);text-transform:uppercase;
+  text-align:center;padding:7px 0 5px;
+  border-bottom:1px solid #1e2126;
+  position:relative;
+}
+
+/* ── INTENSITY CARDS ── */
+.igrid{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:5px;padding:7px 8px;
+}
+.icard{
+  background:linear-gradient(175deg,#111316 0%,#0c0e11 100%);
+  border:1px solid #252830;border-radius:3px;
+  padding:9px 6px 8px;cursor:pointer;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+  text-align:center;transition:border-color 0.15s,background 0.15s;
+  position:relative;overflow:hidden;
+}
+.icard.sel{
+  background:linear-gradient(175deg,#1c1508 0%,#130f05 100%);
+  border-color:rgba(255,140,40,0.65);
+  box-shadow:0 0 14px rgba(255,140,40,0.12),inset 0 0 16px rgba(255,140,40,0.04);
+}
+.icard:active{opacity:0.82;}
+.ic-spiral{
+  display:block;margin:0 auto 6px;
+  width:44px;height:44px;
+}
+.ic-name{
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;
+  font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;
+  line-height:1.1;margin-bottom:2px;
+}
+.ic-desc{
+  font-family:'Barlow Condensed',sans-serif;font-size:0.62rem;
+  color:#5a6470;line-height:1.2;margin-bottom:3px;
+}
+.ic-wind{
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.58rem;color:rgba(255,140,40,0.45);
+}
+
+/* ── BRIEFING ── */
+.brief-grid{
+  display:grid;grid-template-columns:1fr 90px;
+  gap:8px;padding:8px 10px 9px;
+}
+.brief-items{display:flex;flex-direction:column;gap:5px;}
+.bi{display:flex;align-items:flex-start;gap:7px;}
+.bi-icon{font-size:0.95rem;flex-shrink:0;line-height:1.3;}
+.bi-text{
+  font-family:'Barlow Condensed',sans-serif;font-size:0.72rem;
+  color:#6a7a86;line-height:1.35;font-weight:500;text-transform:uppercase;
+}
+.bi-text b{color:#a8b4bc;}
+.brief-right{display:flex;flex-direction:column;align-items:center;gap:6px;}
+#b-radar{display:block;border-radius:50%;border:1px solid rgba(0,180,70,0.25);}
+.specs{width:100%;}
+.spec{
+  display:flex;justify-content:space-between;
+  font-size:0.55rem;padding:2px 0;
+  border-bottom:1px solid rgba(255,140,40,0.06);
+}
+.spec:last-child{border-bottom:none;}
+.sk{color:rgba(255,140,40,0.35);letter-spacing:1px;font-family:'Share Tech Mono',monospace;}
+.sv{color:#6a7a86;font-family:'Share Tech Mono',monospace;}
+
+/* ── CTA ── */
+.cta-wrap{width:100%;max-width:460px;padding:7px 12px 12px;flex-shrink:0;}
+.cta{
+  width:100%;border:none;border-radius:3px;padding:13px 16px;cursor:pointer;
+  font-family:'Bebas Neue',cursive;font-size:clamp(1.2rem,5vw,1.55rem);
+  letter-spacing:4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+  position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  transition:filter 0.12s;
+}
+.cta.active{
+  background:linear-gradient(135deg,#b56000 0%,#f08010 45%,#cc7010 100%);
+  color:#0a0b0d;
+  box-shadow:0 4px 20px rgba(255,140,40,0.3),inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.cta.inactive{
+  background:linear-gradient(135deg,#1c1a16 0%,#252218 100%);
+  color:#3a3828;border:1px solid #2a2820;
+}
+.cta:not(.inactive):active{filter:brightness(0.85);}
+.cta::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,0.04) 0px,rgba(255,255,255,0.04) 1px,transparent 1px,transparent 26px);
+  pointer-events:none;
+}
+
+/* ═══════════════════════════════════════════
+   GAME UI
+═══════════════════════════════════════════ */
+
+/* Thin top status strip */
+#top-strip{
+  display:flex;align-items:stretch;
+  background:#090b0e;
+  border-bottom:1px solid #1e2228;
+  flex-shrink:0;height:44px;
+}
+.ts{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:3px 10px;border-right:1px solid #161a1e;min-width:52px;
+}
+.ts.grow{flex:1;border-right:1px solid #161a1e;}
+.ts:last-child{border-right:none;border-left:1px solid #161a1e;}
+.tl{font-family:'Share Tech Mono',monospace;font-size:0.44rem;letter-spacing:2px;color:rgba(255,140,40,0.32);text-transform:uppercase;}
+.tv{font-family:'Share Tech Mono',monospace;font-size:0.92rem;color:#e07818;line-height:1.1;}
+.tv.g{color:#3de8a0;}.tv.r{color:#e83030;}
+.tv.w{color:#c8d0d8;font-size:0.68rem;font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:1.5px;}
+.tbadge{font-family:'Bebas Neue',cursive;font-size:0.8rem;letter-spacing:2px;padding:1px 7px;border-radius:2px;}
+
+/* Windshield */
+#windshield{
+  position:relative;
+  flex:0 0 auto;
+  height:calc(var(--vh,1vh)*36);
+  min-height:140px;max-height:240px;
+  overflow:hidden;
+}
+#wc{position:absolute;top:0;left:0;}
+#ph-banner{
+  position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  font-family:'Bebas Neue',cursive;font-size:clamp(0.9rem,3.5vw,1.15rem);
+  letter-spacing:5px;color:#e2e8ee;
+  text-shadow:0 0 20px rgba(0,0,0,1);
+  pointer-events:none;white-space:nowrap;z-index:15;
+  opacity:0;transition:opacity 0.4s;
+}
+#ph-banner.vis{opacity:1;}
+#alert-ov{position:absolute;inset:0;pointer-events:none;z-index:14;opacity:0;transition:opacity 0.08s;}
+
+/* Instrument panel — the main event */
+#inst{
+  flex:1;
+  background:linear-gradient(180deg,#0b0d10 0%,#080a0c 100%);
+  border-top:1px solid rgba(255,140,40,0.2);
+  padding:7px 8px 5px;
+  overflow:hidden;
+  display:flex;flex-direction:column;gap:6px;
+  min-height:0;
+  justify-content:space-between;
+}
+
+/* Big gauge row */
+#gauge-row{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:6px;flex:1;
+}
+.gauge{
+  background:linear-gradient(175deg,#0f1216 0%,#0a0c0f 100%);
+  border:1px solid #1e2228;border-radius:3px;
+  padding:7px 9px 6px;
+  display:flex;flex-direction:column;gap:3px;
+  position:relative;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer;
+  transition:border-color 0.16s;
+  overflow:hidden;
+  flex-shrink:0;
+  height:auto;
+}
+/* prevent gauge row from stretching */
+#gauge-row{
+  align-items:start;
+}
+.gauge::before{/* panel texture */
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 11px,rgba(255,255,255,0.008) 11px,rgba(255,255,255,0.008) 12px);
+  pointer-events:none;
+}
+.gauge.spiking{border-color:rgba(255,100,0,0.72);animation:gsp 0.3s ease-in-out infinite alternate;}
+.gauge.redlining{border-color:#dd1a1a;background:linear-gradient(175deg,#160505 0%,#0f0303 100%);}
+.gauge.saved{border-color:#3de8a0;animation:gsv 0.5s ease-out forwards;}
+@keyframes gsp{
+  from{box-shadow:0 0 4px rgba(255,90,0,0.1);}
+  to{box-shadow:0 0 16px rgba(255,90,0,0.55),inset 0 0 12px rgba(255,90,0,0.08);}
+}
+@keyframes gsv{0%{box-shadow:0 0 18px rgba(61,232,160,0.8);}100%{box-shadow:none;}}
+
+.g-label{font-family:'Share Tech Mono',monospace;font-size:0.44rem;letter-spacing:1.5px;color:rgba(255,140,40,0.32);text-transform:uppercase;}
+.g-val{font-family:'Share Tech Mono',monospace;font-size:clamp(1.1rem,4vw,1.5rem);color:#e07818;line-height:1;font-weight:normal;}
+.g-val.g{color:#3de8a0;}.g-val.r{color:#e83030;}
+.g-unit{font-family:'Share Tech Mono',monospace;font-size:0.5rem;color:rgba(255,140,40,0.3);letter-spacing:1px;}
+.g-bar{height:4px;background:rgba(255,140,40,0.07);border-radius:2px;overflow:hidden;margin-top:auto;}
+.g-fill{height:100%;border-radius:2px;transition:width 0.1s,background 0.2s;}
+.tap-h{
+  position:absolute;top:4px;right:6px;
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.42rem;color:rgba(255,140,40,0.6);
+  letter-spacing:1px;animation:blk 0.6s infinite alternate;
+}
+@keyframes blk{from{opacity:0.15}to{opacity:1}}
+
+/* ── GAUGE ROW FIX - no stretching ── */
+#gauge-row{
+  flex-shrink:0!important;
+}
+.gauge{
+  min-height:0!important;
+  height:auto!important;
+}
+
+/* ── COCKPIT ROW ── */
+#cockpit-row{
+  display:grid;
+  grid-template-columns:1fr 1fr 1.2fr 1fr 1fr;
+  gap:6px;
+  align-items:center;
+  padding:0 2px;
+  flex:1;
+  min-height:0;
+}
+.cinst-wrap{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  height:100%;justify-content:center;
+}
+.cinst-label{
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.44rem;letter-spacing:2px;
+  color:rgba(255,140,40,0.35);text-transform:uppercase;
+}
+.cinst-canvas{
+  display:block;border-radius:50%;
+  border:1px solid rgba(255,140,40,0.18);
+  background:#050709;
+  width:min(80px,18vw);
+  height:min(80px,18vw);
+}
+
+/* Center panel */
+#center-panel{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:8px;
+  padding:8px 10px;
+  background:linear-gradient(175deg,#0f1216 0%,#090b0e 100%);
+  border:1px solid #1c2026;border-radius:3px;
+  position:relative;
+  height:100%;
+}
+.cp-label{
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.44rem;letter-spacing:2px;
+  color:rgba(255,140,40,0.3);text-transform:uppercase;
+}
+
+/* Throttle */
+#throttle-track{
+  width:100%;height:14px;
+  background:rgba(0,0,0,0.5);
+  border:1px solid #1e2228;border-radius:7px;
+  position:relative;overflow:hidden;
+}
+#throttle-fill{
+  position:absolute;left:0;top:0;bottom:0;
+  width:72%;
+  background:linear-gradient(90deg,#1a4a20,#2a8a30,#3de8a0);
+  border-radius:7px;
+  transition:width 0.4s;
+}
+#throttle-knob{
+  position:absolute;top:50%;right:28%;
+  transform:translate(50%,-50%);
+  width:12px;height:12px;
+  background:linear-gradient(135deg,#c8d0d8,#8a9298);
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,0.2);
+  box-shadow:0 2px 6px rgba(0,0,0,0.6);
+  transition:right 0.4s;
+}
+
+/* Status lights */
+#status-lights{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:4px 10px;width:100%;
+}
+.slt{display:flex;align-items:center;gap:4px;}
+.sl-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:#2a4a2a;
+  box-shadow:0 0 4px rgba(0,0,0,0.5);
+  flex-shrink:0;transition:background 0.3s,box-shadow 0.3s;
+}
+.slt.ok .sl-dot{background:#3de8a0;box-shadow:0 0 6px rgba(61,232,160,0.6);}
+.slt.warn .sl-dot{background:#e07818;box-shadow:0 0 6px rgba(224,120,24,0.7);}
+.slt.crit .sl-dot{background:#e83030;box-shadow:0 0 8px rgba(232,48,48,0.8);}
+.sl-txt{
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.42rem;letter-spacing:1px;
+  color:rgba(200,208,216,0.35);text-transform:uppercase;
+}
+
+/* Log strip */
+#log{
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.54rem;color:rgba(255,140,40,0.35);
+  letter-spacing:1.5px;text-align:center;text-transform:uppercase;
+  height:11px;overflow:hidden;flex-shrink:0;
+}
+
+/* ── EYE OVERLAY ── */
+#eye-ov{
+  position:fixed;
+  /* Sit in the instrument panel, below the gauges */
+  bottom:0;left:0;right:0;
+  height:auto;
+  z-index:40;
+  display:none;align-items:center;justify-content:center;flex-direction:column;
+  pointer-events:none;
+  background:rgba(10,11,13,0);transition:background 2.5s;
+  padding-bottom:env(safe-area-inset-bottom,0);
+}
+#eye-ov.active{display:flex;}
+#eye-ov.bright{background:rgba(8,12,20,0.82);}
+#eye-inner{
+  background:linear-gradient(175deg,rgba(10,18,30,0.96) 0%,rgba(6,10,18,0.98) 100%);
+  border:1px solid rgba(80,180,160,0.3);
+  border-radius:4px;
+  margin:0 14px 12px;
+  padding:14px 20px 12px;
+  width:calc(100% - 28px);
+  max-width:460px;
+  box-shadow:0 0 30px rgba(60,160,140,0.15);
+}
+#eye-t{
+  font-family:'Bebas Neue',cursive;
+  font-size:clamp(1.4rem,5vw,1.8rem);letter-spacing:6px;
+  color:#c8e8e0;text-align:center;
+  opacity:0;transition:opacity 1s;
+  text-shadow:0 0 20px rgba(80,200,170,0.4);
+  margin-bottom:4px;
+}
+#eye-t.vis{opacity:1;}
+#eye-s{
+  font-family:'Share Tech Mono',monospace;
+  font-size:clamp(0.6rem,2vw,0.72rem);letter-spacing:2px;
+  color:rgba(100,190,170,0.6);
+  opacity:0;transition:opacity 1s;text-align:center;
+  text-transform:uppercase;
+}
+#eye-s.vis{opacity:1;}
+
+/* ── END SCREEN ── */
+#end-screen{justify-content:center;}
+#end-screen h1{
+  font-family:'Bebas Neue',cursive;
+  font-size:clamp(2rem,8vw,2.8rem);
+  letter-spacing:4px;color:#e2e8ee;text-align:center;margin-bottom:4px;
+}
+#end-screen h1 span{color:#e07818;}
+.end-pbox{width:100%;max-width:400px;padding:0 12px;margin:8px 0;}
+.erow{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:6px 0;border-bottom:1px solid rgba(255,140,40,0.06);
+  font-size:0.72rem;
+}
+.erow:last-child{border-bottom:none;}
+.ek{color:rgba(255,140,40,0.45);letter-spacing:1.5px;font-family:'Share Tech Mono',monospace;font-size:0.6rem;}
+.ev{color:#7a8e9a;font-family:'Barlow Condensed',sans-serif;font-size:0.85rem;}
+.ev.g{color:#3de8a0;}
+</style>
+</head>
+<body>
+
+<!-- ══ START SCREEN ══ -->
+<div id="start-screen">
+
+  <!-- Hero -->
+  <div id="hero-wrap">
+    <canvas id="hero-canvas"></canvas>
+    <div class="hero-grad"></div>
+    <div class="hero-sides"></div>
+  </div>
+
+  <!-- Title overlaps hero -->
+  <div class="title-wrap">
+    <div class="title-eyebrow">NOAA Hurricane Hunters</div>
+    <div class="title-main">HURRICANE<br>PILOT</div>
+    <div class="title-sub">Reconnaissance Mission</div>
+  </div>
+
+  <!-- Intensity -->
+  <div class="mpanel">
+    <div class="pbox">
+      <div class="phead">— Select Intensity —</div>
+      <div class="igrid" id="igrid"></div>
+    </div>
+  </div>
+
+  <!-- Briefing -->
+  <div class="mpanel">
+    <div class="pbox">
+      <div class="phead">— Mission Briefing —</div>
+      <div class="brief-grid">
+        <div class="brief-items">
+          <div class="bi"><span class="bi-icon">🎯</span><span class="bi-text"><b>Tap spiking gauges</b> to stabilize instruments.</span></div>
+          <div class="bi"><span class="bi-icon">⚠️</span><span class="bi-text"><b>Redline</b> on any gauge causes hull strike.</span></div>
+          <div class="bi"><span class="bi-icon">🌀</span><span class="bi-text"><b>Eye wall</b> — all gauges spike simultaneously.</span></div>
+          <div class="bi"><span class="bi-icon">👁</span><span class="bi-text"><b>The eye</b> is calm. Earn a data bonus.</span></div>
+        </div>
+        <div class="brief-right">
+          <canvas id="b-radar" width="80" height="80"></canvas>
+          <div class="specs">
+            <div class="spec"><span class="sk">TYPE</span><span class="sv">RECON</span></div>
+            <div class="spec"><span class="sk">A/C</span><span class="sv">WP-3D</span></div>
+            <div class="spec"><span class="sk">CREW</span><span class="sv">10</span></div>
+            <div class="spec"><span class="sk">EST</span><span class="sv">~8 MIN</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-wrap">
+    <button class="cta inactive" id="start-btn">
+      <span id="cta-txt">SELECT INTENSITY ABOVE</span>
+    </button>
+  </div>
+
+</div>
+
+<!-- ══ EYE OVERLAY ══ -->
+<div id="eye-ov">
+  <div id="eye-inner">
+    <div id="eye-t"></div>
+    <div id="eye-s"></div>
+  </div>
+</div>
+
+<!-- ══ GAME UI ══ -->
+<div id="game-ui">
+
+  <div id="top-strip">
+    <div class="ts"><span class="tl">Hull</span><span class="tv g" id="h-hull">///</span></div>
+    <div class="ts"><span class="tl">Score</span><span class="tv" id="h-score">00000</span></div>
+    <div class="ts grow"><span class="tl">Mission Status</span><span class="tv w" id="h-status">OUTER BANDS</span></div>
+    <div class="ts"><span class="tl">Pressure</span><span class="tv" id="h-press">1013</span></div>
+    <div class="ts"><span class="tl">Wind kt</span><span class="tv" id="h-wind">055</span></div>
+    <div class="ts"><span class="tl">Cat</span><span class="tbadge" id="h-badge">TS</span></div>
+  </div>
+
+  <div id="windshield">
+    <canvas id="wc"></canvas>
+    <div id="ph-banner"></div>
+    <div id="alert-ov"></div>
+  </div>
+
+  <div id="inst">
+
+    <!-- Row 1: Four primary gauges (tappable) -->
+    <div id="gauge-row">
+      <div class="gauge" id="g-pressure">
+        <span class="g-label">Baro Pressure</span>
+        <span class="g-val" id="gv-p">1013</span>
+        <span class="g-unit">mb</span>
+        <div class="g-bar"><div class="g-fill" id="gf-p" style="width:6%;background:#3de8a0;"></div></div>
+      </div>
+      <div class="gauge" id="g-wind">
+        <span class="g-label">Wind Speed</span>
+        <span class="g-val" id="gv-w">055</span>
+        <span class="g-unit">kt</span>
+        <div class="g-bar"><div class="g-fill" id="gf-w" style="width:6%;background:#3de8a0;"></div></div>
+      </div>
+      <div class="gauge" id="g-alt">
+        <span class="g-label">Altitude</span>
+        <span class="g-val" id="gv-a">8500</span>
+        <span class="g-unit">ft</span>
+        <div class="g-bar"><div class="g-fill" id="gf-a" style="width:10%;background:#3de8a0;"></div></div>
+      </div>
+      <div class="gauge" id="g-temp">
+        <span class="g-label">Temp</span>
+        <span class="g-val" id="gv-t">+22</span>
+        <span class="g-unit">°c</span>
+        <div class="g-bar"><div class="g-fill" id="gf-t" style="width:6%;background:#3de8a0;"></div></div>
+      </div>
+    </div>
+
+    <!-- Row 2: Cockpit instruments -->
+    <div id="cockpit-row">
+
+      <!-- Attitude Indicator -->
+      <div class="cinst-wrap">
+        <div class="cinst-label">ATT</div>
+        <canvas class="cinst-canvas" id="cv-att" width="80" height="80"></canvas>
+      </div>
+
+      <!-- Radar Scope -->
+      <div class="cinst-wrap">
+        <div class="cinst-label">RADAR</div>
+        <canvas class="cinst-canvas" id="cv-radar" width="80" height="80"></canvas>
+      </div>
+
+      <!-- Center panel: throttle + status lights -->
+      <div id="center-panel">
+        <div class="cp-label">THROTTLE</div>
+        <div id="throttle-track">
+          <div id="throttle-fill"></div>
+          <div id="throttle-knob"></div>
+        </div>
+        <div id="status-lights">
+          <div class="slt" id="sl-hull"><span class="sl-dot"></span><span class="sl-txt">HULL</span></div>
+          <div class="slt" id="sl-data"><span class="sl-dot"></span><span class="sl-txt">DATA</span></div>
+          <div class="slt" id="sl-nav"><span class="sl-dot"></span><span class="sl-txt">NAV</span></div>
+          <div class="slt" id="sl-eng"><span class="sl-dot"></span><span class="sl-txt">ENG</span></div>
+        </div>
+      </div>
+
+      <!-- Vertical Speed Indicator -->
+      <div class="cinst-wrap">
+        <div class="cinst-label">VSI</div>
+        <canvas class="cinst-canvas" id="cv-vsi" width="80" height="80"></canvas>
+      </div>
+
+      <!-- Heading Indicator -->
+      <div class="cinst-wrap">
+        <div class="cinst-label">HDG</div>
+        <canvas class="cinst-canvas" id="cv-hdg" width="80" height="80"></canvas>
+      </div>
+
+    </div>
+
+    <!-- Log strip -->
+    <div id="log">NOAA42 · PRE-FLIGHT NOMINAL · AWAITING MISSION START</div>
+  </div>
+</div>
+
+<!-- ══ END SCREEN ══ -->
+<div id="end-screen" style="display:none;">
+  <div class="title-eyebrow" style="margin-bottom:5px;">Mission Debrief · NOAA42</div>
+  <h1 id="e-title">Mission <span>Complete</span></h1>
+  <div class="end-pbox"><div class="pbox" style="padding:0 12px;">
+    <div class="erow"><span class="ek">Intensity</span><span class="ev g" id="e-iv"></span></div>
+    <div class="erow"><span class="ek">Score</span><span class="ev g" id="e-sc" style="font-size:1rem;font-family:'Share Tech Mono',monospace;"></span></div>
+    <div class="erow"><span class="ek">Rating</span><span class="ev" id="e-rt"></span></div>
+    <div class="erow"><span class="ek">Data Collected</span><span class="ev" id="e-dt"></span></div>
+    <div class="erow"><span class="ek">Hull Strikes</span><span class="ev" id="e-st"></span></div>
+    <div class="erow"><span class="ek">Phase Reached</span><span class="ev" id="e-ph"></span></div>
+  </div></div>
+  <p id="e-sub" style="font-size:0.76rem;color:#3a4a54;text-align:center;margin:5px 0 10px;max-width:340px;font-family:'Barlow Condensed',sans-serif;font-weight:500;line-height:1.5;padding:0 16px;"></p>
+  <div class="cta-wrap" style="max-width:460px;">
+    <button class="cta active" id="replay-btn">NEW MISSION</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════
+// DATA
+// ══════════════════════════
+const IVS = [
+  {id:'TS',name:'Tropical Storm',desc:'Organized Thunderstorms',wind:'39–73 kt',
+   col:'#7eb8ff',skyT:[12,18,40],skyB:[6,10,23],rainA:0.07,rainN:90,rainL:0.011,ltgF:0.001,cloudD:0.34,turbM:0.46,spkM:0.50,winM:1.9,maxS:1,ewC:false,pStart:1008,eyePress:997,wStart:54,sMult:1.0},
+  {id:'C1',name:'Category 1',desc:'Very Strong Winds',wind:'74–95 kt',
+   col:'#4dffb4',skyT:[10,15,30],skyB:[5,8,17],rainA:0.10,rainN:130,rainL:0.015,ltgF:0.002,cloudD:0.50,turbM:0.60,spkM:0.66,winM:1.52,maxS:1,ewC:false,pStart:1000,eyePress:986,wStart:74,sMult:1.3},
+  {id:'C2',name:'Category 2',desc:'Damaging Winds',wind:'96–110 kt',
+   col:'#ffd44d',skyT:[9,13,24],skyB:[4,6,12],rainA:0.13,rainN:160,rainL:0.018,ltgF:0.004,cloudD:0.64,turbM:0.74,spkM:0.82,winM:1.22,maxS:2,ewC:false,pStart:990,eyePress:972,wStart:92,sMult:1.7},
+  {id:'C3',name:'Category 3',desc:'Devastating Damage',wind:'111–129 kt',
+   col:'#ffaa22',skyT:[8,10,18],skyB:[3,5,9],rainA:0.16,rainN:185,rainL:0.022,ltgF:0.008,cloudD:0.78,turbM:0.86,spkM:1.0,winM:1.0,maxS:2,ewC:true,pStart:978,eyePress:952,wStart:112,sMult:2.2},
+  {id:'C4',name:'Category 4',desc:'Catastrophic Damage',wind:'130–156 kt',
+   col:'#ff6622',skyT:[7,8,13],skyB:[3,4,7],rainA:0.20,rainN:210,rainL:0.026,ltgF:0.014,cloudD:0.88,turbM:0.94,spkM:1.22,winM:0.72,maxS:3,ewC:true,pStart:962,eyePress:928,wStart:138,sMult:3.0},
+  {id:'C5',name:'Category 5',desc:'Catastrophic Damage',wind:'157+ kt',
+   col:'#ff2222',skyT:[6,7,10],skyB:[2,3,5],rainA:0.25,rainN:240,rainL:0.033,ltgF:0.024,cloudD:1.0,turbM:1.0,spkM:1.42,winM:0.50,maxS:4,ewC:true,pStart:938,eyePress:892,wStart:162,sMult:4.0},
+];
+
+const BPH = [
+  {id:'outer',      lbl:'OUTER BANDS',           dur:18,tF:0.28,wF:0.55,pF:0.28,sp:0.015},
+  {id:'inner',      lbl:'INNER BANDS',            dur:15,tF:0.55,wF:0.72,pF:0.62,sp:0.028},
+  {id:'eyewall',    lbl:'EYE WALL',               dur:11,tF:0.96,wF:1.0, pF:0.95,sp:0.057},
+  {id:'eye',        lbl:'EYE OF THE STORM',       dur:9, tF:0.0, wF:0.10,pF:1.0, sp:0.0},
+  {id:'eyewall_out',lbl:'EYE WALL — OUTBOUND',    dur:11,tF:0.96,wF:1.0, pF:0.90,sp:0.057},
+  {id:'inner_out',  lbl:'INNER BANDS — OUTBOUND', dur:13,tF:0.48,wF:0.65,pF:0.55,sp:0.024},
+  {id:'outer_out',  lbl:'OUTER BANDS — OUTBOUND', dur:13,tF:0.20,wF:0.42,pF:0.24,sp:0.011},
+];
+
+const PLOGS = {
+  outer:['PENETRATING OUTER RAIN BANDS','TURBULENCE BUILDING','PRESSURE DROPPING'],
+  inner:['INNER BAND PENETRATION','WIND SHEAR INCREASING','HOLD COURSE'],
+  eyewall:['EYE WALL CONTACT — ALL HANDS','MAXIMUM TURBULENCE','STABILIZE INSTRUMENTS'],
+  eye:['EYE REACHED — CALM ZONE','DATA TRANSMITTING TO NHC','DROPSONDE DEPLOYED'],
+  eyewall_out:['OUTBOUND EYE WALL','MAINTAIN HEADING','ALMOST THROUGH'],
+  inner_out:['OUTBOUND INNER BANDS','PRESSURE RISING','SYSTEMS NOMINAL'],
+  outer_out:['EXITING STORM','CLEAR AIR AHEAD','MISSION DATA SECURED'],
+};
+
+const GK = ['p','w','a','t'];
+const GIDS = {p:'g-pressure',w:'g-wind',a:'g-alt',t:'g-temp'};
+
+// ══════════════════════════
+// SPIRAL CANVAS HELPER
+// ══════════════════════════
+function drawSpiral(ctx,cx,cy,r,col,rot,alpha){
+  ctx.save();
+  for(let arm=0;arm<3;arm++){
+    const aOff=(arm/3)*Math.PI*2;
+    for(let t=0;t<200;t++){
+      const ang=(t/20)*Math.PI+aOff+rot;
+      const rad=t*(r/200)*1.1;
+      const x=cx+Math.cos(ang)*rad;
+      const y=cy+Math.sin(ang)*rad*0.72;
+      const a=Math.max(0,alpha-(t/200)*alpha);
+      ctx.fillStyle=`rgba(${col},${a})`;
+      ctx.fillRect(x,y,1.1,1.1);
+    }
+  }
+  ctx.restore();
+}
+
+// ══════════════════════════
+// HERO CANVAS
+// ══════════════════════════
+const hc=document.getElementById('hero-canvas');
+const hx=hc.getContext('2d');
+let heroRaf,heroTs=0;
+
+function resizeHero(){
+  hc.width=hc.offsetWidth||window.innerWidth;
+  hc.height=hc.offsetHeight||200;
+}
+
+function animHero(ts){
+  heroTs=ts;
+  if(!hc.width) resizeHero();
+  const W=hc.width,H=hc.height;
+  hx.clearRect(0,0,W,H);
+
+  // Dark sky
+  const bg=hx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#050709');bg.addColorStop(1,'#0c1018');
+  hx.fillStyle=bg;hx.fillRect(0,0,W,H);
+
+  // Storm spiral
+  drawSpiral(hx,W*0.5,H*0.38,Math.min(W,H)*0.55,'170,190,220',ts*0.00016,0.14);
+
+  // Eye glow
+  const eg=hx.createRadialGradient(W*0.5,H*0.38,0,W*0.5,H*0.38,H*0.28);
+  eg.addColorStop(0,'rgba(200,225,255,0.18)');
+  eg.addColorStop(0.5,'rgba(140,180,255,0.05)');
+  eg.addColorStop(1,'rgba(0,0,0,0)');
+  hx.fillStyle=eg;hx.beginPath();hx.arc(W*0.5,H*0.38,H*0.28,0,Math.PI*2);hx.fill();
+
+  // Rain
+  hx.save();
+  for(let i=0;i<55;i++){
+    const rx=((Math.sin(i*137)*0.5+0.5))*W;
+    const ry=((i*0.618+ts*0.00014)%1)*H;
+    hx.strokeStyle=`rgba(120,160,200,${0.03+Math.random()*0.06})`;
+    hx.lineWidth=0.7;hx.beginPath();hx.moveTo(rx,ry);hx.lineTo(rx-2,ry+12);hx.stroke();
+  }
+  hx.restore();
+
+  // Lightning
+  if(Math.random()<0.006){
+    hx.save();hx.strokeStyle=`rgba(200,215,255,${0.3+Math.random()*0.4})`;
+    hx.lineWidth=1.2;hx.shadowColor='rgba(170,195,255,0.5)';hx.shadowBlur=8;
+    let lx=W*(0.15+Math.random()*0.7),ly=0;
+    hx.beginPath();hx.moveTo(lx,ly);
+    for(let i=0;i<7;i++){lx+=(Math.random()-0.5)*46;ly+=H*0.15;hx.lineTo(lx,ly);}
+    hx.stroke();hx.shadowBlur=0;hx.restore();
+  }
+
+  // Plane silhouette — front view, lower portion
+  const px=W/2,py=H*0.82,sp=Math.min(W*0.5,200);
+  hx.save();hx.shadowColor='rgba(0,0,0,0.95)';hx.shadowBlur=24;
+  // Fuselage
+  hx.fillStyle='#181e28';
+  hx.beginPath();hx.ellipse(px,py-sp*0.04,sp*0.065,sp*0.3,0,0,Math.PI*2);hx.fill();
+  // Wings
+  hx.fillStyle='#111820';
+  [[-1,1],[1,-1]].forEach(([s,_])=>{
+    hx.beginPath();
+    hx.moveTo(px+s*sp*0.06,py);
+    hx.lineTo(px+s*sp,py+sp*0.10);
+    hx.lineTo(px+s*sp*0.92,py+sp*0.17);
+    hx.lineTo(px+s*sp*0.04,py+sp*0.06);
+    hx.closePath();hx.fill();
+  });
+  // 4 engines
+  [-0.65,-0.32,0.32,0.65].forEach(ex=>{
+    hx.fillStyle='#0c1018';
+    hx.beginPath();hx.ellipse(px+ex*sp,py+sp*0.1,sp*0.05,sp*0.13,0,0,Math.PI*2);hx.fill();
+    hx.strokeStyle='rgba(160,175,195,0.1)';hx.lineWidth=1.5;
+    hx.beginPath();hx.ellipse(px+ex*sp,py+sp*0.04,sp*0.1,sp*0.022,0,0,Math.PI*2);hx.stroke();
+  });
+  // Tail fin
+  hx.fillStyle='#111820';
+  hx.beginPath();
+  hx.moveTo(px,py-sp*0.28);hx.lineTo(px-sp*0.16,py-sp*0.52);
+  hx.lineTo(px+sp*0.01,py-sp*0.30);hx.closePath();hx.fill();
+  // NOAA orange stripe
+  hx.strokeStyle='rgba(255,140,40,0.22)';hx.lineWidth=1.8;
+  hx.beginPath();hx.moveTo(px-sp*0.055,py-sp*0.20);hx.lineTo(px+sp*0.055,py-sp*0.20);hx.stroke();
+  hx.restore();
+
+  heroRaf=requestAnimationFrame(animHero);
+}
+
+// Briefing radar
+function drawBR(){
+  const rc=document.getElementById('b-radar');
+  const rx=rc.getContext('2d');
+  const W=rc.width,H=rc.height,cx=W/2,cy=H/2;
+  rx.clearRect(0,0,W,H);
+  rx.fillStyle='#010d06';rx.fillRect(0,0,W,H);
+  for(let i=1;i<=3;i++){
+    rx.strokeStyle=`rgba(0,175,65,${0.07+i*0.04})`;rx.lineWidth=0.5;
+    rx.beginPath();rx.arc(cx,cy,(W/2)*i/3,0,Math.PI*2);rx.stroke();
+  }
+  rx.strokeStyle='rgba(0,155,55,0.12)';rx.lineWidth=0.5;
+  rx.beginPath();rx.moveTo(0,cy);rx.lineTo(W,cy);rx.stroke();
+  rx.beginPath();rx.moveTo(cx,0);rx.lineTo(cx,H);rx.stroke();
+  drawSpiral(rx,cx,cy,W*0.44,'0,200,75',0,0.5);
+  rx.fillStyle='#e07818';rx.beginPath();rx.arc(cx,cy,2.5,0,Math.PI*2);rx.fill();
+  rx.strokeStyle='rgba(255,140,40,0.28)';rx.lineWidth=1.5;
+  rx.beginPath();rx.arc(cx,cy,W/2-1,0,Math.PI*2);rx.stroke();
+}
+
+// ══════════════════════════
+// BUILD INTENSITY CARDS
+// ══════════════════════════
+let selIV=null;
+const igrid=document.getElementById('igrid');
+
+IVS.forEach((iv,i)=>{
+  const c=document.createElement('div');
+  c.className='icard';
+
+  const sc=document.createElement('canvas');
+  sc.className='ic-spiral';
+  sc.width=44;sc.height=44;
+  const sx=sc.getContext('2d');
+  const hx2=iv.col.replace('#','');
+  const cr2=parseInt(hx2.substring(0,2),16);
+  const cg2=parseInt(hx2.substring(2,4),16);
+  const cb2=parseInt(hx2.substring(4,6),16);
+  drawSpiral(sx,22,22,19,cr2+','+cg2+','+cb2,0,0.75);
+  sx.fillStyle=iv.col;sx.beginPath();sx.arc(22,22,3,0,Math.PI*2);sx.fill();
+
+  const nm=document.createElement('div');
+  nm.className='ic-name';nm.style.color=iv.col;nm.textContent=iv.name;
+  const ds=document.createElement('div');
+  ds.className='ic-desc';ds.textContent=iv.desc;
+  const wn=document.createElement('div');
+  wn.className='ic-wind';wn.textContent=iv.wind;
+
+  c.appendChild(sc);c.appendChild(nm);c.appendChild(ds);c.appendChild(wn);
+  c.addEventListener('click',()=>pickIV(i,c));
+  c.addEventListener('touchend',e=>{e.preventDefault();pickIV(i,c);});
+  igrid.appendChild(c);
+});
+
+function pickIV(i,card){
+  document.querySelectorAll('.icard').forEach(c=>{
+    c.classList.remove('sel');c.style.borderColor='';
+  });
+  card.classList.add('sel');
+  card.style.borderColor=IVS[i].col+'aa';
+  selIV=IVS[i];
+  const btn=document.getElementById('start-btn');
+  btn.classList.remove('inactive');btn.classList.add('active');
+  document.getElementById('cta-txt').textContent=`BEGIN MISSION — ${IVS[i].name.toUpperCase()}`;
+}
+
+// ══════════════════════════
+// GAME STATE
+// ══════════════════════════
+const wc=document.getElementById('wc');
+const wx=wc.getContext('2d');
+let GW,GH;
+function rsz(){const ws=document.getElementById('windshield');GW=wc.width=ws.clientWidth;GH=wc.height=ws.clientHeight;}
+
+let gSt='idle',gSc,gHull,gStr,gData;
+let phIdx,phTimer,phProg;
+let gTurb,gShk;
+let gRain,gClds;
+let gFr,gLast,curIV,gPhs,gG;
+
+function mkPhases(iv){
+  return BPH.map(b=>({
+    id:b.id,lbl:b.lbl,
+    dur:b.dur+(5-IVS.indexOf(iv))*1.1,
+    turb:b.tF*iv.turbM,
+    wind:iv.wStart*(0.38+b.wF*0.62),
+    press:iv.pStart-b.pF*(iv.pStart-(iv.eyePress||886)),
+    spawn:b.sp*iv.spkM,
+  }));
+}
+
+// Buttons
+document.getElementById('start-btn').addEventListener('click',startG);
+document.getElementById('start-btn').addEventListener('touchend',e=>{e.preventDefault();startG();});
+document.getElementById('replay-btn').addEventListener('click',()=>{
+  document.getElementById('end-screen').style.display='none';
+  document.getElementById('start-screen').style.display='flex';
+  resizeHero();requestAnimationFrame(animHero);
+});
+document.getElementById('replay-btn').addEventListener('touchend',e=>{
+  e.preventDefault();
+  document.getElementById('end-screen').style.display='none';
+  document.getElementById('start-screen').style.display='flex';
+});
+
+// Gauge taps
+GK.forEach(k=>{
+  const el=document.getElementById(GIDS[k]);
+  el.addEventListener('click',()=>tapG(k));
+  el.addEventListener('touchstart',e=>{e.preventDefault();tapG(k);},{passive:false});
+});
+
+function startG(){
+  if(!selIV)return;
+  curIV=selIV;
+  cancelAnimationFrame(heroRaf);
+  document.getElementById('start-screen').style.display='none';
+  document.getElementById('end-screen').style.display='none';
+  document.getElementById('eye-ov').classList.remove('active','bright');
+  document.getElementById('game-ui').style.display='flex';
+
+  const badge=document.getElementById('h-badge');
+  badge.textContent=curIV.id;
+  badge.style.color=curIV.col;
+  badge.style.background=curIV.col+'18';
+  badge.style.border=`1px solid ${curIV.col}44`;
+
+  gSc=0;gHull=3;gStr=0;gData=0;
+  gTurb=0;gShk=0;
+  phIdx=0;phTimer=0;phProg=0;
+  gPhs=mkPhases(curIV);
+  gG={};
+  GK.forEach(k=>{gG[k]={v:0,sp:false,rl:false,st:0,cd:0,svT:0};});
+  gRain=mkRain();gClds=mkClouds();
+  enterPh(0);
+  gSt='playing';gLast=null;
+  cancelAnimationFrame(gFr);
+  setTimeout(()=>{rsz();gFr=requestAnimationFrame(gLoop);},50);
+}
+
+function mkRain(){
+  const d=[];
+  for(let i=0;i<curIV.rainN;i++){
+    d.push({x:Math.random(),y:Math.random(),
+      len:curIV.rainL*(0.6+Math.random()*0.9),
+      spd:0.25+Math.random()*0.5,
+      a:curIV.rainA*(0.5+Math.random()),
+      dr:(Math.random()-0.5)*0.04});
+  }
+  return d;
+}
+
+function mkClouds(){
+  const ls=[];
+  for(let i=0;i<3;i++){
+    const l=[];
+    for(let j=0;j<7;j++){
+      l.push({x:Math.random(),y:0.04+Math.random()*0.72,
+        w:0.13+Math.random()*0.28,h:0.05+Math.random()*0.13,
+        spd:(0.005+Math.random()*0.009)*(i+1),
+        a:(0.05+Math.random()*0.09)*curIV.cloudD});
+    }
+    ls.push(l);
+  }
+  return ls;
+}
+
+function enterPh(idx){
+  phIdx=idx;phTimer=0;phProg=0;
+  const p=gPhs[idx],bp=BPH[idx];
+  gTurb=p.turb;
+  document.getElementById('h-status').textContent=bp.lbl;
+  const b=document.getElementById('ph-banner');
+  b.textContent=bp.lbl;b.classList.add('vis');
+  setTimeout(()=>b.classList.remove('vis'),2600);
+  if(bp.id==='eye') doEye();
+  setLog('ENTERING '+bp.lbl);
+}
+
+function doEye(){
+  const ov=document.getElementById('eye-ov');
+  const et=document.getElementById('eye-t');
+  const es=document.getElementById('eye-s');
+  ov.classList.add('active');
+  const p=gPhs[phIdx];
+  const lines=[
+    ['EYE OF THE STORM',`PRESSURE: ${Math.round(p.press)} MB · WINDS: ${Math.round(p.wind)} KT`],
+    ['DATA TRANSMITTED','NHC MIAMI RECEIVING · DROPSONDE NOMINAL'],
+    ['TURNING OUTBOUND','PREPARE FOR EYE WALL RE-ENTRY'],
+  ];
+  let li=0;
+  function sl(){
+    if(li>=lines.length){et.classList.remove('vis');es.classList.remove('vis');setTimeout(()=>ov.classList.remove('active','bright'),900);return;}
+    et.textContent=lines[li][0];es.textContent=lines[li][1];
+    et.classList.add('vis');es.classList.add('vis');li++;
+    setTimeout(()=>{et.classList.remove('vis');es.classList.remove('vis');setTimeout(sl,650);},2400);
+  }
+  setTimeout(()=>{ov.classList.add('bright');sl();},380);
+}
+
+function gLoop(ts){
+  if(!gLast)gLast=ts;
+  const dt=Math.min((ts-gLast)/1000,0.05);gLast=ts;
+  if(gSt==='playing'){gUpd(dt);gDraw();drawInstruments();}
+  if(gSt==='playing') gFr=requestAnimationFrame(gLoop);
+}
+
+function gUpd(dt){
+  const p=gPhs[phIdx],bp=BPH[phIdx];
+  phTimer+=dt;phProg=Math.min(1,phTimer/p.dur);
+  if(phTimer>=p.dur){
+    if(phIdx<gPhs.length-1){gSc+=Math.round(75*curIV.sMult);enterPh(phIdx+1);}
+    else{endG(true);return;}
+  }
+  gShk=gTurb*(0.5+Math.sin(Date.now()*0.003)*0.5)*17;
+  if(bp.id==='eye')gShk=0;
+  const spk=GK.filter(k=>gG[k].sp).length;
+  if(bp.id!=='eye'&&spk<curIV.maxS){if(Math.random()<p.spawn*(1+phProg*0.6))doSpk();}
+  if((bp.id==='eyewall'||bp.id==='eyewall_out')&&curIV.ewC&&Math.random()<0.005){
+    GK.filter(k=>!gG[k].sp&&!gG[k].rl).forEach(k=>spkOn(k));
+  }
+  GK.forEach(k=>{
+    const g=gG[k];
+    if(g.svT>0){g.svT-=dt;if(g.svT<=0)document.getElementById(GIDS[k]).classList.remove('saved');}
+    if(g.cd>0){g.cd-=dt;return;}
+    if(g.sp){
+      g.st-=dt;g.v=Math.min(1,g.v+dt*(0.40+(1-curIV.winM)*0.26));
+      if(g.v>=0.88&&!g.rl){
+        g.rl=true;
+        document.getElementById(GIDS[k]).classList.add('redlining');
+        document.getElementById(GIDS[k]).classList.remove('spiking');
+        hullHit(k);
+      }
+      if(g.st<=0)resSpk(k,false);
+    } else {g.v=Math.max(0,g.v-dt*0.3);}
+    updGD(k);
+  });
+  const wind=Math.round(p.wind+gTurb*20*Math.sin(Date.now()*0.002));
+  const press=Math.round(p.press-phProg*3+Math.sin(Date.now()*0.001)*1);
+  document.getElementById('h-wind').textContent=String(wind).padStart(3,'0');
+  document.getElementById('h-press').textContent=press;
+  document.getElementById('h-score').textContent=String(gSc).padStart(5,'0');
+  const hEl=document.getElementById('h-hull');
+  hEl.textContent=gHull>=3?'///':gHull===2?'// ':gHull===1?'/  ':'---';
+  hEl.className='tv '+(gHull>=2?'g':'r');
+  const s=0.24+gTurb*0.5;
+  for(const d of gRain){
+    d.x+=d.dr*dt*s*2.5;d.y+=d.spd*s*dt;
+    if(d.y>1){d.y=0;d.x=Math.random();}
+    if(d.x<0)d.x=1;if(d.x>1)d.x=0;
+  }
+  for(const l of gClds){for(const c of l){c.x-=c.spd*(0.36+gTurb*0.85)*dt;if(c.x+c.w<0)c.x=1+c.w;}}
+}
+
+function doSpk(){
+  const av=GK.filter(k=>!gG[k].sp&&!gG[k].rl&&gG[k].cd<=0);
+  if(!av.length)return;
+  spkOn(av[Math.floor(Math.random()*av.length)]);
+}
+function spkOn(k){
+  const g=gG[k];
+  g.sp=true;g.rl=false;
+  g.st=Math.max(0.82,2.4*curIV.winM*(1-phProg*0.2));
+  const el=document.getElementById(GIDS[k]);
+  el.classList.add('spiking');el.classList.remove('redlining','saved');
+  if(!el.querySelector('.tap-h')){
+    const h=document.createElement('span');h.className='tap-h';h.textContent='TAP';el.appendChild(h);
+  }
+}
+function resSpk(k,tapped){
+  const g=gG[k];g.sp=false;g.rl=false;g.cd=tapped?0.82:1.6;
+  const el=document.getElementById(GIDS[k]);
+  el.classList.remove('spiking','redlining');
+  const h=el.querySelector('.tap-h');if(h)h.remove();
+  if(tapped){g.v=0.04;g.svT=0.8;el.classList.add('saved');gSc+=Math.round(24*curIV.sMult);gData++;}
+}
+function tapG(k){
+  const g=gG[k];
+  if(g.sp){resSpk(k,true);}
+  else if(!g.rl&&g.v<0.3){gSc+=Math.round(7*curIV.sMult);gData++;g.svT=0.5;const el=document.getElementById(GIDS[k]);el.classList.add('saved');setTimeout(()=>el.classList.remove('saved'),500);}
+}
+function hullHit(k){
+  gStr++;gHull=Math.max(0,gHull-1);
+  const ov=document.getElementById('alert-ov');
+  ov.style.background='#aa1200';ov.style.opacity='0.28';
+  setTimeout(()=>ov.style.opacity='0',220);
+  setLog('HULL STRIKE — '+(gHull>0?gHull+' INTEGRITY REMAINING':'CRITICAL DAMAGE'));
+  setTimeout(()=>resSpk(k,false),300);
+  if(gHull<=0)setTimeout(()=>endG(false),850);
+}
+function updGD(k){
+  const g=gG[k],p=gPhs[phIdx];
+  const pct=Math.round(g.v*100);
+  const sfx={p:'p',w:'w',a:'a',t:'t'}[k];
+  const fEl=document.getElementById('gf-'+sfx);
+  const vEl=document.getElementById('gv-'+sfx);
+  fEl.style.width=pct+'%';
+  const col=g.rl?'#dd1a1a':g.sp?`hsl(${Math.max(0,34-g.v*36)},100%,52%)`:'#3de8a0';
+  fEl.style.background=col;
+  let dv;
+  switch(k){
+    case 'p':dv=Math.round(p.press-g.v*12+(g.sp?-6:0));vEl.textContent=dv;break;
+    case 'w':dv=Math.round(p.wind+g.v*50+(g.sp?24:0));vEl.textContent=String(dv).padStart(3,'0');break;
+    case 'a':dv=Math.round(8500-g.v*1600+(g.sp?-310:0));vEl.textContent=dv;break;
+    case 't':dv=Math.round(22-g.v*16+(g.sp?-6:0));vEl.textContent=(dv>=0?'+':'')+dv;break;
+  }
+  vEl.className='g-val '+(g.rl?'r':g.v<0.28?'g':'');
+}
+function setLog(m){document.getElementById('log').textContent='NOAA42 · '+m;}
+
+// ══════════════════════════
+// DRAW WINDSHIELD
+// ══════════════════════════
+function gDraw(){
+  rsz();if(!GW||!GH)return;
+  const sx=gShk>0?(Math.random()-0.5)*gShk:0;
+  const sy=gShk>0?(Math.random()-0.5)*gShk:0;
+  wx.save();wx.translate(sx,sy);
+  dSky();dClouds();dRain();dHorizon();dLtg();dFrame();
+  wx.restore();
+}
+
+function dSky(){
+  const bp=BPH[phIdx],iv=curIV;
+  let top,bot;
+  if(bp.id==='eye'){top=[16,30,62];bot=[9,18,40];}
+  else{
+    const st=Math.min(1,gTurb*0.72+phProg*0.28);
+    top=iv.skyT.map(v=>Math.max(3,Math.floor(v*(1-st*0.55))));
+    bot=iv.skyB.map(v=>Math.max(2,Math.floor(v*(1-st*0.55))));
+  }
+  const g=wx.createLinearGradient(0,0,0,GH);
+  g.addColorStop(0,`rgb(${top[0]},${top[1]},${top[2]})`);
+  g.addColorStop(1,`rgb(${bot[0]},${bot[1]},${bot[2]})`);
+  wx.fillStyle=g;wx.fillRect(-20,-20,GW+40,GH+40);
+  if(bp.id==='eye'){
+    const eg=wx.createRadialGradient(GW/2,-GH*0.1,0,GW/2,-GH*0.1,GH*0.9);
+    eg.addColorStop(0,'rgba(60,115,195,0.28)');eg.addColorStop(0.5,'rgba(28,65,135,0.08)');eg.addColorStop(1,'rgba(0,0,0,0)');
+    wx.fillStyle=eg;wx.fillRect(-20,-20,GW+40,GH+40);
+  }
+  if(IVS.indexOf(iv)>=4&&bp.id!=='eye'){
+    const tg=wx.createRadialGradient(GW*0.5,GH*0.3,0,GW*0.5,GH*0.3,GW*0.65);
+    tg.addColorStop(0,`rgba(255,60,0,${0.026+gTurb*0.036})`);tg.addColorStop(1,'rgba(0,0,0,0)');
+    wx.fillStyle=tg;wx.fillRect(0,0,GW,GH);
+  }
+}
+function dHorizon(){
+  const bp=BPH[phIdx],hy=GH*0.55;
+  const og=wx.createLinearGradient(0,hy,0,GH);
+  if(bp.id==='eye'){og.addColorStop(0,'rgba(8,24,55,0)');og.addColorStop(1,'rgba(4,12,32,0.97)');}
+  else{og.addColorStop(0,'rgba(2,6,14,0)');og.addColorStop(1,'rgba(2,4,10,0.97)');}
+  wx.fillStyle=og;wx.fillRect(0,hy,GW,GH-hy);
+  if(bp.id!=='eye'){
+    wx.save();
+    for(let i=0;i<4;i++){
+      const wy=hy+15+i*18;
+      wx.strokeStyle=`rgba(18,48,105,${0.042-i*0.007})`;wx.lineWidth=1;wx.beginPath();
+      for(let x=0;x<GW;x+=3){const y=wy+Math.sin((x*0.02)+Date.now()*0.0005*(i+1))*3;x===0?wx.moveTo(x,y):wx.lineTo(x,y);}
+      wx.stroke();
+    }
+    wx.restore();
+  }
+}
+function dClouds(){
+  if(BPH[phIdx].id==='eye')return;
+  gClds.forEach(l=>{
+    const ba=curIV.cloudD*(0.42+gTurb*0.58);
+    for(const c of l){
+      const cg=wx.createRadialGradient((c.x+c.w/2)*GW,c.y*GH,0,(c.x+c.w/2)*GW,c.y*GH,c.w*GW*0.6);
+      cg.addColorStop(0,`rgba(11,16,30,${c.a*ba*1.6})`);cg.addColorStop(1,'rgba(0,0,0,0)');
+      wx.fillStyle=cg;wx.beginPath();wx.ellipse((c.x+c.w/2)*GW,c.y*GH,c.w*GW*0.6,c.h*GH*0.85,0,0,Math.PI*2);wx.fill();
+    }
+  });
+}
+function dRain(){
+  const bp=BPH[phIdx];
+  if(bp.id==='eye'){
+    wx.save();wx.strokeStyle='rgba(150,180,215,0.028)';wx.lineWidth=0.4;
+    for(const d of gRain.slice(0,28)){wx.beginPath();wx.moveTo(d.x*GW,d.y*GH);wx.lineTo(d.x*GW,d.y*GH+d.len*GH*0.32);wx.stroke();}
+    wx.restore();return;
+  }
+  const it=0.24+gTurb*0.76;
+  wx.save();
+  for(const d of gRain){
+    wx.strokeStyle=`rgba(125,168,208,${d.a*it})`;wx.lineWidth=0.45+gTurb*0.88;
+    wx.beginPath();wx.moveTo(d.x*GW,d.y*GH);wx.lineTo(d.x*GW+d.dr*GW*gTurb*2.8,d.y*GH+d.len*GH);wx.stroke();
+  }
+  wx.restore();
+}
+function dLtg(){
+  if(BPH[phIdx].id==='eye')return;
+  if(Math.random()>curIV.ltgF*(1+gTurb*1.7))return;
+  const br=0.20+gTurb*0.55;
+  wx.save();wx.strokeStyle=`rgba(200,218,255,${br})`;wx.lineWidth=1.0+gTurb*0.95;
+  wx.shadowColor='rgba(168,192,255,0.48)';wx.shadowBlur=9;
+  let lx=GW*(0.1+Math.random()*0.8),ly=0;
+  wx.beginPath();wx.moveTo(lx,ly);
+  for(let i=0;i<9;i++){lx+=(Math.random()-0.5)*48;ly+=GH*0.12;wx.lineTo(lx,ly);}
+  wx.stroke();wx.shadowBlur=0;
+  if(IVS.indexOf(curIV)>=4&&Math.random()<0.3){
+    wx.fillStyle=`rgba(255,180,90,${0.022+Math.random()*0.038})`;wx.fillRect(0,0,GW,GH);
+  }
+  wx.restore();
+}
+function dFrame(){
+  // Vignette
+  const v=wx.createRadialGradient(GW/2,GH/2,GW*0.18,GW/2,GH/2,GW*0.78);
+  v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,0.72)');
+  wx.fillStyle=v;wx.fillRect(-20,-20,GW+40,GH+40);
+  // Dark border frame
+  wx.strokeStyle='rgba(12,16,22,0.98)';wx.lineWidth=34;wx.strokeRect(0,0,GW,GH);
+  // Orange corner brackets
+  wx.strokeStyle='rgba(255,140,40,0.2)';wx.lineWidth=1.5;
+  const ac=18;
+  [[0,0],[GW,0],[0,GH],[GW,GH]].forEach(([cx,cy])=>{
+    const sx=cx===0?1:-1,sy=cy===0?1:-1;
+    wx.beginPath();
+    wx.moveTo(cx+sx*5,cy+sy*5);wx.lineTo(cx+sx*(5+ac),cy+sy*5);
+    wx.moveTo(cx+sx*5,cy+sy*5);wx.lineTo(cx+sx*5,cy+sy*(5+ac));
+    wx.stroke();
+  });
+  // Wipers
+  if(gTurb>0.20){
+    const t2=Date.now()*0.002*(1+gTurb*1.65);
+    const wa=Math.sin(t2)*0.54;
+    wx.strokeStyle=`rgba(20,28,40,${0.36+gTurb*0.44})`;wx.lineWidth=3.5;
+    [[GW*0.35,-0.38],[GW*0.65,0.38]].forEach(([wsx,off])=>{
+      wx.save();wx.translate(wsx,GH*1.02);wx.rotate(wa+off);
+      wx.beginPath();wx.moveTo(0,0);wx.lineTo(0,-GH*0.38);wx.stroke();wx.restore();
+    });
+  }
+}
+
+// ══════════════════════════
+// END
+// ══════════════════════════
+function endG(ok){
+  gSt='idle';cancelAnimationFrame(gFr);
+  document.getElementById('game-ui').style.display='none';
+  document.getElementById('eye-ov').classList.remove('active','bright');
+  let rt;
+  if(gSc>=900)rt='MISSION COMMANDER';
+  else if(gSc>=650)rt='SENIOR FLIGHT DIRECTOR';
+  else if(gSc>=400)rt='FLIGHT METEOROLOGIST';
+  else if(gSc>=200)rt='FLIGHT ENGINEER';
+  else rt='TRAINEE OBSERVER';
+  document.getElementById('e-title').innerHTML=ok?'Mission <span>Complete</span>':'Mission <span>Aborted</span>';
+  document.getElementById('e-iv').textContent=curIV.name+' ('+curIV.id+')';
+  document.getElementById('e-sc').textContent=String(gSc).padStart(5,'0')+' pts';
+  document.getElementById('e-rt').textContent=rt;
+  document.getElementById('e-dt').textContent=gData+' readings';
+  document.getElementById('e-st').textContent=gStr;
+  document.getElementById('e-ph').textContent=BPH[phIdx].lbl;
+  document.getElementById('e-sub').textContent=ok
+    ?'Atmospheric data transmitted to NHC Miami. Outstanding mission.'
+    :'Aircraft returned to MacDill AFB with critical hull damage.';
+  document.getElementById('end-screen').style.display='flex';
+}
+
+// ══════════════════════════
+// COCKPIT INSTRUMENTS
+// ══════════════════════════
+
+let instAnim = 0;
+let hdgAngle = 47; // degrees, drifts slowly
+let vsiNeedle = 0; // -1 to +1
+let attPitch = 0, attBank = 0;
+
+function drawInstruments() {
+  if (!gSt || gSt !== 'playing') return;
+  instAnim += 0.02;
+  const bp = BPH[phIdx];
+  const turb = gTurb;
+
+  // Drift heading slowly, wobble with turbulence
+  hdgAngle = (hdgAngle + 0.08 + (Math.random()-0.5)*turb*1.2) % 360;
+  vsiNeedle = Math.sin(instAnim*0.7)*turb*0.6 + (Math.random()-0.5)*turb*0.3;
+  attPitch  = Math.sin(instAnim*0.5)*turb*8;
+  attBank   = Math.sin(instAnim*0.3)*turb*12 + (Math.random()-0.5)*turb*4;
+
+  // Throttle — high in storm, backs off slightly at eye
+  const throttlePct = bp.id === 'eye' ? 55 : 68 + turb*22;
+  const tf = document.getElementById('throttle-fill');
+  const tk = document.getElementById('throttle-knob');
+  if (tf) { tf.style.width = throttlePct + '%'; tk.style.right = (100-throttlePct) + '%'; }
+
+  // Status lights
+  setLight('sl-hull', gHull >= 2 ? 'ok' : gHull === 1 ? 'warn' : 'crit');
+  setLight('sl-data', gData > 0 ? 'ok' : '');
+  setLight('sl-nav',  bp.id === 'eye' ? 'warn' : 'ok');
+  setLight('sl-eng',  turb > 0.8 ? 'warn' : 'ok');
+
+  drawATT();
+  drawRadarScope();
+  drawVSI();
+  drawHDG();
+}
+
+function setLight(id, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'slt ' + cls;
+}
+
+function instCircle(ctx, W, H, label) {
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#050709'; ctx.fillRect(0,0,W,H);
+  // Bezel gradient
+  const bez = ctx.createRadialGradient(W/2,H/2,W*0.36,W/2,H/2,W*0.5);
+  bez.addColorStop(0,'rgba(0,0,0,0)');
+  bez.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle = bez;
+  ctx.beginPath(); ctx.arc(W/2,H/2,W/2,0,Math.PI*2); ctx.fill();
+  // Tick marks
+  ctx.strokeStyle = 'rgba(255,140,40,0.2)'; ctx.lineWidth = 0.8;
+  for (let i=0; i<12; i++) {
+    const ang = (i/12)*Math.PI*2;
+    const r1 = W*0.44, r2 = W*(i%3===0?0.36:0.40);
+    ctx.beginPath();
+    ctx.moveTo(W/2+Math.cos(ang)*r1, H/2+Math.sin(ang)*r1);
+    ctx.lineTo(W/2+Math.cos(ang)*r2, H/2+Math.sin(ang)*r2);
+    ctx.stroke();
+  }
+}
+
+function drawATT() {
+  const cv = document.getElementById('cv-att');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, cx = W/2, cy = H/2;
+  ctx.clearRect(0,0,W,H);
+
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,W/2-1,0,Math.PI*2); ctx.clip();
+
+  // Sky/ground split with bank and pitch
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(attBank * Math.PI/180);
+  const pitchOff = attPitch * 1.2;
+  ctx.fillStyle = '#0a1e3c'; ctx.fillRect(-W,-H*2+pitchOff,W*2,H*2);
+  ctx.fillStyle = '#2a1605'; ctx.fillRect(-W,pitchOff,W*2,H*2);
+  // Horizon line
+  ctx.strokeStyle = '#e07818'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(-W,pitchOff); ctx.lineTo(W,pitchOff); ctx.stroke();
+  // Pitch lines
+  ctx.strokeStyle='rgba(255,140,40,0.3)'; ctx.lineWidth=0.8;
+  for(let p=-3;p<=3;p++){
+    if(!p) continue;
+    const py=pitchOff+p*W*0.18;
+    const lw=p%2===0?W*0.28:W*0.18;
+    ctx.beginPath();ctx.moveTo(-lw/2,py);ctx.lineTo(lw/2,py);ctx.stroke();
+  }
+  ctx.restore();
+
+  // Fixed aircraft symbol
+  ctx.strokeStyle='#e07818'; ctx.lineWidth=1.8;
+  ctx.beginPath(); ctx.moveTo(cx-W*0.32,cy); ctx.lineTo(cx-W*0.1,cy);
+  ctx.moveTo(cx+W*0.1,cy); ctx.lineTo(cx+W*0.32,cy); ctx.stroke();
+  ctx.fillStyle='#e07818'; ctx.beginPath(); ctx.arc(cx,cy,2.5,0,Math.PI*2); ctx.fill();
+
+  // Bezel clip
+  ctx.strokeStyle='rgba(255,140,40,0.25)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cx,cy,W/2-1,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawRadarScope() {
+  const cv = document.getElementById('cv-radar');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, cx = W/2, cy = H/2;
+  ctx.clearRect(0,0,W,H);
+
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,W/2-1,0,Math.PI*2); ctx.clip();
+  ctx.fillStyle='#010e06'; ctx.fillRect(0,0,W,H);
+
+  // Range rings
+  for(let i=1;i<=3;i++){
+    ctx.strokeStyle=`rgba(0,180,65,${0.08+i*0.04})`; ctx.lineWidth=0.6;
+    ctx.beginPath(); ctx.arc(cx,cy,(W/2)*i/3,0,Math.PI*2); ctx.stroke();
+  }
+  // Cross
+  ctx.strokeStyle='rgba(0,160,55,0.12)'; ctx.lineWidth=0.5;
+  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(W,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,H); ctx.stroke();
+
+  // Sweep line
+  const sweep = (instAnim * 1.1) % (Math.PI*2);
+  const sweepG = ctx.createConicalGradient ? null : null;
+  ctx.strokeStyle='rgba(0,220,80,0.6)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(cx,cy);
+  ctx.lineTo(cx+Math.cos(sweep)*(W/2-2), cy+Math.sin(sweep)*(H/2-2)); ctx.stroke();
+
+  // Sweep trail (faint wedge)
+  ctx.fillStyle='rgba(0,200,70,0.04)';
+  ctx.beginPath(); ctx.moveTo(cx,cy);
+  ctx.arc(cx,cy,W/2-2,sweep-0.6,sweep); ctx.closePath(); ctx.fill();
+
+  // Storm blobs at various distances
+  const blobAngles = [0.8, 2.1, 3.4, 4.8];
+  const blobR = [W*0.18, W*0.28, W*0.35, W*0.22];
+  blobAngles.forEach((a,i) => {
+    const bx = cx+Math.cos(a)*blobR[i], by = cy+Math.sin(a)*blobR[i];
+    const bg = ctx.createRadialGradient(bx,by,0,bx,by,W*0.08);
+    bg.addColorStop(0,`rgba(0,220,80,${0.3+gTurb*0.3})`);
+    bg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(bx,by,W*0.08,0,Math.PI*2); ctx.fill();
+  });
+
+  // Plane dot
+  ctx.fillStyle='#e07818'; ctx.beginPath(); ctx.arc(cx,cy,2.5,0,Math.PI*2); ctx.fill();
+
+  ctx.strokeStyle='rgba(255,140,40,0.25)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cx,cy,W/2-1,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawVSI() {
+  const cv = document.getElementById('cv-vsi');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, cx = W/2, cy = H/2;
+  instCircle(ctx, W, H);
+
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,W/2-1,0,Math.PI*2); ctx.clip();
+
+  // VSI arc — 0 center, up = climb, down = sink
+  // Range: -150 to +150 fpm display, needle rotates -135 to +135 deg
+  const needleAng = (Math.PI/2) + vsiNeedle * (Math.PI * 0.75);
+  ctx.strokeStyle='rgba(255,140,40,0.15)'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.arc(cx,cy,W*0.35,-Math.PI*0.25,Math.PI*1.25); ctx.stroke();
+
+  // Scale labels
+  ctx.fillStyle='rgba(255,140,40,0.35)'; ctx.font=`${W*0.1}px Share Tech Mono,monospace`;
+  ctx.textAlign='center';
+  [[-0.75,'U'],[0,'0'],[0.75,'D']].forEach(([v,lbl])=>{
+    const a = (Math.PI/2)+v*(Math.PI*0.75);
+    ctx.fillText(lbl, cx+Math.cos(a)*W*0.3, cy+Math.sin(a)*W*0.3+3);
+  });
+
+  // Needle
+  const col = vsiNeedle > 0.5 ? '#e83030' : vsiNeedle < -0.5 ? '#3de8a0' : '#e07818';
+  ctx.strokeStyle = col; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(cx - Math.cos(needleAng)*W*0.12, cy - Math.sin(needleAng)*W*0.12);
+  ctx.lineTo(cx + Math.cos(needleAng)*W*0.34, cy + Math.sin(needleAng)*W*0.34);
+  ctx.stroke();
+  ctx.fillStyle=col; ctx.beginPath(); ctx.arc(cx,cy,3,0,Math.PI*2); ctx.fill();
+
+  ctx.strokeStyle='rgba(255,140,40,0.22)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cx,cy,W/2-1,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawHDG() {
+  const cv = document.getElementById('cv-hdg');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, cx = W/2, cy = H/2;
+  instCircle(ctx, W, H);
+
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,W/2-1,0,Math.PI*2); ctx.clip();
+  ctx.fillStyle='#050709'; ctx.fillRect(0,0,W,H);
+
+  // Rotating compass card
+  ctx.save();
+  ctx.translate(cx,cy); ctx.rotate(-hdgAngle*Math.PI/180);
+  // Cardinal labels
+  ctx.fillStyle='rgba(255,140,40,0.7)';
+  ctx.font=`bold ${W*0.14}px Barlow Condensed,sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  [['N',0],['E',90],['S',180],['W',270]].forEach(([lbl,deg])=>{
+    const a = deg*Math.PI/180;
+    ctx.fillText(lbl, Math.sin(a)*W*0.32, -Math.cos(a)*W*0.32);
+  });
+  // Degree ticks
+  ctx.strokeStyle='rgba(255,140,40,0.2)'; ctx.lineWidth=0.7;
+  for(let d=0;d<36;d++){
+    const a=d*10*Math.PI/180;
+    const r1=W*0.42,r2=W*(d%3===0?0.35:0.38);
+    ctx.beginPath();
+    ctx.moveTo(Math.sin(a)*r1,-(Math.cos(a)*r1));
+    ctx.lineTo(Math.sin(a)*r2,-(Math.cos(a)*r2));
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Fixed lubber line (top)
+  ctx.strokeStyle='#e07818'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(cx,cy-W*0.38); ctx.lineTo(cx,cy-W*0.28); ctx.stroke();
+  // Triangle pointer
+  ctx.fillStyle='#e07818';
+  ctx.beginPath(); ctx.moveTo(cx,cy-W*0.42); ctx.lineTo(cx-4,cy-W*0.34); ctx.lineTo(cx+4,cy-W*0.34); ctx.closePath(); ctx.fill();
+  // Center dot
+  ctx.fillStyle='rgba(255,140,40,0.5)'; ctx.beginPath(); ctx.arc(cx,cy,2,0,Math.PI*2); ctx.fill();
+
+  // HDG readout
+  ctx.fillStyle='rgba(255,140,40,0.55)';
+  ctx.font=`${W*0.11}px Share Tech Mono,monospace`; ctx.textAlign='center';
+  ctx.fillText(String(Math.round(hdgAngle)%360).padStart(3,'0')+'°', cx, cy+W*0.22);
+
+  ctx.strokeStyle='rgba(255,140,40,0.22)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cx,cy,W/2-1,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+// ══════════════════════════
+// INIT
+// ══════════════════════════
+// ── VIEWPORT HEIGHT FIX (Android Chrome) ──
+function setVH() {
+  const vh = window.innerHeight * 0.01;
+  document.documentElement.style.setProperty('--vh', vh + 'px');
+}
+setVH();
+window.addEventListener('resize', setVH);
+window.addEventListener('orientationchange', () => setTimeout(setVH, 150));
+
+window.addEventListener('resize',()=>{if(gSt==='playing')rsz();resizeHero();});
+resizeHero();
+drawBR();
+requestAnimationFrame(animHero);
+</script>
+</body>
+</html>
